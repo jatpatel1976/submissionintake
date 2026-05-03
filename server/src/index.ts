@@ -5,7 +5,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { getQuote, saveQuote, updateQuote } from "./services/quoteRepository.js";
-import { extractText } from "./services/documentParser.js";
 import { classifySubmission, extractSubmissionFromText } from "./services/extractionService.js";
 import { QuoteSchema, SubmissionSchema } from "./schemas/quote.schema.js";
 
@@ -40,16 +39,21 @@ api.listen(API_PORT, () => {
 
 const server = new McpServer({ name: "submission-intake", version: "0.1.0" });
 
+const DocumentInputSchema = {
+  documentText: z.string().min(1).describe("Plain text contents of the uploaded submission document from the Claude prompt"),
+  fileName: z.string().optional().describe("Original uploaded file name, when available")
+};
+
 server.tool(
   "classify_document",
   "Classify an insurance document and recommend whether it should be processed as a submission.",
-  { filePath: z.string().describe("Absolute path to a local .txt or .md sample document") },
-  async ({ filePath }) => {
-    const text = await extractText(filePath);
-    const classification = classifySubmission(text);
+  DocumentInputSchema,
+  async ({ documentText, fileName }) => {
+    const classification = classifySubmission(documentText);
+    const sourceFile = fileName ?? "Claude prompt upload";
     return {
-      content: [{ type: "text", text: JSON.stringify({ filePath, ...classification }, null, 2) }],
-      structuredContent: { filePath, ...classification }
+      content: [{ type: "text", text: JSON.stringify({ sourceFile, ...classification }, null, 2) }],
+      structuredContent: { sourceFile, ...classification }
     };
   }
 );
@@ -57,10 +61,9 @@ server.tool(
 server.tool(
   "extract_submission",
   "Extract structured commercial insurance submission data from a document.",
-  { filePath: z.string().describe("Absolute path to a local .txt or .md sample document") },
-  async ({ filePath }) => {
-    const text = await extractText(filePath);
-    const submission = SubmissionSchema.parse(extractSubmissionFromText(filePath, text));
+  DocumentInputSchema,
+  async ({ documentText, fileName }) => {
+    const submission = SubmissionSchema.parse(extractSubmissionFromText(fileName ?? "Claude prompt upload", documentText));
     return {
       content: [{ type: "text", text: JSON.stringify(submission, null, 2) }],
       structuredContent: submission

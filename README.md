@@ -7,7 +7,7 @@ It includes:
 - A local MCP server for Claude Desktop
 - Tools to classify a document, extract submission data, create a quote and retrieve/update the quote
 - A React/Vite quote record UI
-- A sample broker submission text file
+- A sample broker submission text file you can upload or attach in Claude
 
 ## Prerequisites
 
@@ -77,7 +77,7 @@ On macOS this is usually:
 ~/Library/Application Support/Claude/claude_desktop_config.json
 ```
 
-Add this configuration, replacing the path with your actual repo path:
+Add this configuration, replacing the server path with your actual repo path:
 
 ```json
 {
@@ -112,14 +112,13 @@ npm run dev:ui
 Then in Claude Desktop, ask:
 
 ```text
-Use the submission-intake MCP server to classify this file:
-/ABSOLUTE/PATH/TO/submission-intake-poc/samples/sample-submission.txt
+I uploaded a broker submission. Use the submission-intake MCP server to classify the uploaded document.
 ```
 
 Then ask:
 
 ```text
-Extract the submission data from the same file.
+Extract the submission data from the uploaded document.
 ```
 
 Then ask:
@@ -136,13 +135,15 @@ http://localhost:5173?quoteId=Q-POC-XXXXXXXX
 
 Open that link to view the quote record UI.
 
+The MCP tools expect Claude to pass the uploaded document text from the prompt into the tool call. They no longer require or accept an absolute local file path for submission processing.
+
 ## Current prototype limitation
 
 This version returns a local quote UI link rather than a fully embedded Claude MCP App iframe. It is structured so you can evolve it into a full MCP App resource once your Claude Desktop build supports the Apps extension surface you want to target.
 
 ## Next production enhancements
 
-- Add PDF and DOCX parsing
+- Add richer PDF and DOCX extraction for uploaded files
 - Add LLM extraction into the Zod schema
 - Store field-level evidence and confidence
 - Add PostgreSQL persistence
