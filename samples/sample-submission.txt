@@ -1,0 +1,16 @@
+Broker: Example Broker
+Contact: jane.smith@examplebroker.co.uk
+Insured: ABC Manufacturing Ltd
+Trade: Precision engineering
+Address: 1 Industrial Estate, Birmingham
+Turnover: £12,500,000
+Inception Date: 2026-06-01
+
+Requested covers:
+- Property Damage
+- Business Interruption
+- Employers Liability
+- Public Liability
+
+Notes:
+Broker has requested a Commercial Combined quote. Claims history, construction type and BI indemnity period are not supplied.

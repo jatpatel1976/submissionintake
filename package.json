@@ -1,0 +1,22 @@
+{
+  "name": "submission-intake-poc",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/quote-ui",
+    "server"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "dev:ui": "npm --workspace apps/quote-ui run dev",
+    "build:ui": "npm --workspace apps/quote-ui run build",
+    "preview:ui": "npm --workspace apps/quote-ui run preview",
+    "dev:server": "npm --workspace server run dev",
+    "build:server": "npm --workspace server run build",
+    "start:server": "npm --workspace server run start",
+    "dev": "concurrently -n UI,MCP -c blue,green \"npm run dev:ui\" \"npm run dev:server\""
+  },
+  "devDependencies": {
+    "concurrently": "latest"
+  }
+}
