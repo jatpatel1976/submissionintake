@@ -8,10 +8,47 @@ type Quote = {
   quoteId: string;
   status: "Draft" | "In Review" | "Quoted" | "Declined";
   createdAt: string;
+  productType: "generic_commercial" | "property_owners";
   insured: { name?: string; trade?: string; address?: string; turnover?: number };
   broker?: { name?: string; contact?: string };
   risk: { classOfBusiness?: string; inceptionDate?: string; coversRequested: string[] };
-  dataQuality: { missingFields: string[]; warnings: string[]; confidence: number };
+  productSubmission?: {
+    productType: "property_owners";
+    productData: PropertyOwnersProductData;
+  };
+  dataQuality: {
+    missingFields: string[];
+    warnings: string[];
+    confidence: number;
+    evidence?: Array<{ field: string; label?: string; evidence?: string; confidence: number }>;
+  };
+};
+
+type PropertyOwnersProductData = {
+    product: "Property Owners Package";
+    coverage: {
+      buildingsAndLandlordContents?: number;
+      lossOfRentMonths?: number;
+      propertyOwnersLiability?: number;
+      terrorismIncluded?: boolean;
+      engineeringInspectionAndBreakdownRequested?: boolean;
+    };
+    locations: Array<{
+      name: string;
+      construction?: string;
+      yearBuilt?: number;
+      stories?: string;
+      tiv?: number;
+      occupancy?: string;
+      notes?: string;
+    }>;
+    lossHistory: Array<{
+      date?: string;
+      type?: string;
+      paid?: number;
+      reserved?: number;
+      description?: string;
+    }>;
 };
 
 type ToolResult = {
@@ -24,6 +61,11 @@ const isEmbeddedMcpApp = window.parent !== window;
 function formatCurrency(value?: number) {
   if (!value) return "Missing";
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
+}
+
+function getPropertyData(quote: Quote): PropertyOwnersProductData | null {
+  if (quote.productSubmission?.productType === "property_owners") return quote.productSubmission.productData;
+  return null;
 }
 
 function quoteFromToolResult(result: ToolResult): Quote | null {
@@ -212,6 +254,96 @@ function InsuredEditor({ quote, onSave }: InsuredEditorProps) {
   );
 }
 
+function PropertyOwnersPanel({ quote }: { quote: Quote }) {
+  const property = getPropertyData(quote);
+  if (!property) return null;
+
+  return (
+    <>
+      <article className="card property-summary">
+        <h2>Property Coverage</h2>
+        <dl>
+          <dt>Buildings & Contents</dt><dd>{formatCurrency(property.coverage.buildingsAndLandlordContents)}</dd>
+          <dt>Loss of Rent</dt><dd>{property.coverage.lossOfRentMonths ? `${property.coverage.lossOfRentMonths} months` : "Missing"}</dd>
+          <dt>Owners Liability</dt><dd>{formatCurrency(property.coverage.propertyOwnersLiability)}</dd>
+          <dt>Terrorism</dt><dd>{property.coverage.terrorismIncluded ? "Included" : "Not requested"}</dd>
+          <dt>Engineering</dt><dd>{property.coverage.engineeringInspectionAndBreakdownRequested ? "Requested" : "Not requested"}</dd>
+        </dl>
+      </article>
+
+      <article className="card table-card">
+        <h2>Location Schedule</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Location</th>
+                <th>Construction</th>
+                <th>Year</th>
+                <th>Stories</th>
+                <th>TIV</th>
+                <th>Occupancy</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {property.locations.map((location) => (
+                <tr key={location.name}>
+                  <td>{location.name}</td>
+                  <td>{location.construction ?? "Missing"}</td>
+                  <td>{location.yearBuilt ?? "Missing"}</td>
+                  <td>{location.stories ?? "Missing"}</td>
+                  <td>{formatCurrency(location.tiv)}</td>
+                  <td>{location.occupancy ?? "Missing"}</td>
+                  <td>{location.notes ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article className="card table-card">
+        <h2>Loss History</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Paid</th>
+                <th>Reserved</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {property.lossHistory.map((loss, index) => (
+                <tr key={`${loss.date}-${index}`}>
+                  <td>{loss.date ?? "Missing"}</td>
+                  <td>{loss.type ?? "Missing"}</td>
+                  <td>{formatCurrency(loss.paid)}</td>
+                  <td>{formatCurrency(loss.reserved)}</td>
+                  <td>{loss.description ?? ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </>
+  );
+}
+
+const productRenderers: Record<string, (quote: Quote) => React.ReactNode> = {
+  property_owners: (quote) => <PropertyOwnersPanel quote={quote} />
+};
+
+function ProductPanels({ quote }: { quote: Quote }) {
+  const renderer = productRenderers[quote.productType];
+  if (renderer) return <>{renderer(quote)}</>;
+  return null;
+}
+
 function App() {
   const { quote, error, isConnecting, updateStatus, updateQuote } = useQuote();
 
@@ -256,6 +388,8 @@ function App() {
             {quote.risk.coversRequested.map((cover) => <span className="pill" key={cover}>{cover}</span>)}
           </div>
         </article>
+
+        <ProductPanels quote={quote} />
 
         <article className="card warning-card">
           <h2>Data Quality</h2>

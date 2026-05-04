@@ -1,0 +1,88 @@
+{
+  "quoteId": "Q-POC-A25AB742",
+  "status": "Draft",
+  "createdAt": "2026-05-04T16:30:52.832Z",
+  "insured": {
+    "name": "Marwick Row Estates Ltd",
+    "trade": "Lessors of Nonresidential Buildings (NAICS 531120)",
+    "address": "12 premises across London, Birmingham, Bristol",
+    "turnover": 8700000
+  },
+  "broker": {
+    "name": "Aster Risk Partners",
+    "contact": "Marina Patel"
+  },
+  "risk": {
+    "classOfBusiness": "Property Owners Package",
+    "inceptionDate": "2026-07-01",
+    "coversRequested": [
+      "Buildings and landlord contents – GBP 96,450,000",
+      "Loss of rent – 36 months",
+      "Property owners liability – GBP 10,000,000",
+      "Terrorism (separate pool wording)",
+      "Engineering inspection and breakdown"
+    ]
+  },
+  "dataQuality": {
+    "missingFields": [
+      "Expiring deductibles (to be taken from attachments)",
+      "Retroactive dates",
+      "Individual location asset identifiers (flagged as duplicate/missing in schedule)",
+      "EWS1 resolution status"
+    ],
+    "warnings": [
+      "Terrorism taxes excluded from quote target per broker instruction",
+      "EOW deductible cap: insured will not accept >GBP 25,000 for residential blocks",
+      "Mill Yard Works (Bristol, 1890) – brick/timber joist with restaurant deep-fat fryers: elevated fire risk",
+      "Canal House – student accommodation; cladding remediation completed 2024 but EWS1 lender wording unresolved",
+      "17-25 Marwick Row – 18% unoccupied residential units",
+      "Expired 2022 valuation schedule submitted as Appendix B – values in location schedule should be used instead",
+      "Loss history includes open liability reserve of GBP 35,000 (slip allegation, denial filed)"
+    ],
+    "confidence": 0.72,
+    "evidence": [
+      {
+        "field": "insured.name",
+        "label": "Named Insured",
+        "evidence": "Marwick Row Estates Ltd",
+        "confidence": 0.98
+      },
+      {
+        "field": "insured.turnover",
+        "label": "Turnover",
+        "evidence": "GBP 8.7m rental income",
+        "confidence": 0.95
+      },
+      {
+        "field": "risk.inceptionDate",
+        "label": "Inception Date",
+        "evidence": "Proposed effective date 01 July 2026",
+        "confidence": 0.95
+      },
+      {
+        "field": "risk.coversRequested",
+        "label": "Covers",
+        "evidence": "Section 3 – Coverage Requested",
+        "confidence": 0.93
+      },
+      {
+        "field": "broker.name",
+        "label": "Broker",
+        "evidence": "Aster Risk Partners / Marina Patel",
+        "confidence": 0.98
+      },
+      {
+        "field": "locations.tiv",
+        "label": "Total TIV",
+        "evidence": "Sum of location schedule: GBP 96,450,000",
+        "confidence": 0.9
+      },
+      {
+        "field": "lossHistory",
+        "label": "Loss History",
+        "evidence": "3 losses 2022-2024; largest GBP 186,400 EOW",
+        "confidence": 0.9
+      }
+    ]
+  }
+}

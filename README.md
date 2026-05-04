@@ -5,7 +5,7 @@ This repo is a runnable proof of concept for an AI-native insurance submission i
 It includes:
 
 - A local MCP server for Claude Desktop
-- Tools to classify a document, extract submission data, create a quote and retrieve/update the quote
+- Tools to classify a document, extract submission data from pasted text or machine-readable PDFs, create a quote and retrieve/update the quote
 - A React/Vite quote record UI embedded inline in Claude as an MCP App iframe
 - A Markdown submission intake playbook that drives classification indicators, extraction labels, defaults and data quality checks
 - A sample broker submission text file you can upload or attach in Claude Desktop
@@ -175,6 +175,62 @@ If the slash commands are not visible, use the natural-language prompts above in
 Claude should call the MCP tools and render the quote record UI inline in the conversation as an MCP App iframe. The status buttons in the embedded UI call the `update_quote_status` MCP tool.
 
 The MCP tools expect Claude to pass the uploaded document text from the prompt into the tool call. They no longer require or accept an absolute local file path for submission processing.
+
+## PDF Submissions
+
+The intake tools accept two document input modes:
+
+```text
+documentText
+```
+
+Use this when Claude Desktop can read the uploaded document text from the chat or when you paste the broker submission into the prompt.
+
+```text
+documentBase64 + mimeType: application/pdf + fileName
+```
+
+Use this when the MCP host can pass the uploaded PDF bytes directly to the tool. The server extracts machine-readable text from the PDF before classification and extraction. Scanned image-only PDFs are not OCR'd in this PoC; those should be converted with OCR before intake.
+
+The extraction pipeline now avoids filling missing insured/broker fields with demo defaults. Missing extracted fields are left blank and listed in `dataQuality.missingFields` so the embedded quote UI can be used for human correction. Extracted fields also include lightweight label/evidence/confidence metadata under `dataQuality.evidence`.
+
+## Property Owners Schema
+
+The server includes a property-specific extraction tool:
+
+```text
+extract_property_submission
+```
+
+To persist the extracted property schedule on a quote and render it in the embedded quote UI, pass the property extraction result to:
+
+```text
+create_quote
+```
+
+Use it for property owners package submissions where the broker document contains portfolio-level property datapoints. The tool validates the output against a dedicated property schema covering:
+
+- Broker details and submission reference
+- Named insured, industry code, rental income, employees and operations
+- Buildings and landlord contents, loss of rent, property owners liability, terrorism and engineering inspection/breakdown
+- Scheduled premises, construction, year built, stories, TIV, occupancy and notes
+- Loss history, paid/reserved amounts and descriptions
+- Attachments and potential intake issues
+- Underwriting narrative, deductible constraints and broker instructions
+- Missing fields, warnings and extraction evidence
+
+`create_quote` accepts either a generic `submission` from `extract_submission` or a product-specific `productSubmission` envelope from `extract_property_submission`. Property owners output is stored on the quote as `productType: "property_owners"`, `productSubmission` and `productData`, including `locations`, `lossHistory`, coverage details and underwriting data.
+
+Product-specific schemas are organized around a shared envelope:
+
+```text
+server/src/schemas/common.schema.ts
+server/src/schemas/productSubmission.schema.ts
+server/src/schemas/products/propertyOwners.schema.ts
+server/src/products/registry.ts
+```
+
+Add new lines of business by adding a product schema, extractor and registry entry. The quote UI renders product panels by `quote.productType`.
 
 ## MCP App UI
 

@@ -9,7 +9,12 @@ import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@model
 import { z } from "zod";
 import { getQuote, saveQuote, updateQuote } from "./services/quoteRepository.js";
 import { classifySubmission, extractSubmissionFromText, getSubmissionIntakeInstructions } from "./services/extractionService.js";
+import { parseDocumentInput } from "./services/documentParser.js";
 import { QuoteSchema, SubmissionSchema } from "./schemas/quote.schema.js";
+import { ProductSubmissionEnvelopeSchema } from "./schemas/productSubmission.schema.js";
+import { PropertyOwnersSubmissionEnvelopeSchema } from "./schemas/products/propertyOwners.schema.js";
+import { extractPropertySubmissionFromText } from "./services/propertyExtractionService.js";
+import { quoteFromProductSubmission } from "./products/registry.js";
 const API_PORT = Number(process.env.API_PORT ?? 8787);
 const api = express();
 api.use(cors());
@@ -39,9 +44,60 @@ const quoteRecordResourceUri = "ui://quote-record/index.html";
 const quoteRecordHtmlPath = path.resolve(import.meta.dirname, "../../apps/quote-ui/dist/index.html");
 const submissionPlaybookResourceUri = "skill://submission-intake/playbook.md";
 const DocumentInputSchema = {
-    documentText: z.string().min(1).describe("Plain text contents of the uploaded submission document from the Claude prompt"),
+    documentText: z.string().optional().describe("Plain text contents of the uploaded submission document from the Claude prompt"),
+    documentBase64: z.string().optional().describe("Base64 encoded PDF document bytes, when the host can pass uploaded file contents directly"),
+    mimeType: z.string().optional().describe("Document MIME type, for example application/pdf"),
     fileName: z.string().optional().describe("Original uploaded file name, when available")
 };
+function markdownCell(value) {
+    if (value === undefined || value === null || value === "")
+        return "";
+    return String(value).replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
+}
+function formatCurrency(value) {
+    if (value === undefined)
+        return "";
+    return new Intl.NumberFormat("en-GB", {
+        style: "currency",
+        currency: "GBP",
+        maximumFractionDigits: 0
+    }).format(value);
+}
+function propertyLocationTable(propertySubmission) {
+    const rows = propertySubmission.productData.locations.map((location) => [
+        location.name,
+        location.construction,
+        location.yearBuilt,
+        location.stories,
+        formatCurrency(location.tiv),
+        location.occupancy,
+        location.notes
+    ]);
+    return [
+        "## Location Schedule",
+        "",
+        "| Location | Construction | Year | Stories | TIV | Occupancy | Notes |",
+        "|---|---|---:|---:|---:|---|---|",
+        ...rows.map((row) => `| ${row.map(markdownCell).join(" | ")} |`)
+    ].join("\n");
+}
+function propertySubmissionMarkdown(propertySubmission) {
+    return [
+        `# ${propertySubmission.productData.product}`,
+        "",
+        `Source: ${propertySubmission.sourceFile ?? "Unknown"}`,
+        `Insured: ${propertySubmission.productData.insured.name ?? "Missing"}`,
+        `Broker: ${propertySubmission.productData.broker.name ?? "Missing"}`,
+        "",
+        propertyLocationTable(propertySubmission),
+        "",
+        "## Full Structured Extraction",
+        "",
+        "```json",
+        JSON.stringify(propertySubmission, null, 2),
+        "```"
+    ].join("\n");
+}
 registerAppResource(server, "Quote Record", quoteRecordResourceUri, {
     description: "Embedded quote record UI for reviewing extracted submission and quote details"
 }, async () => {
@@ -84,6 +140,11 @@ server.prompt("upload_submission", "Use after attaching a broker submission file
                     "- documentText: the uploaded document text",
                     "- fileName: the original uploaded file name, when available",
                     "",
+                    "If the host can pass uploaded PDF bytes instead of extracted text, call classify_document with:",
+                    "- documentBase64: the base64 encoded PDF bytes",
+                    "- mimeType: application/pdf",
+                    "- fileName: the original uploaded PDF file name",
+                    "",
                     "Return the classification, confidence, matched indicators and recommended next action."
                 ].join("\n")
             }
@@ -105,6 +166,11 @@ server.prompt("extract_submission", "Extract structured submission data from the
                     "- documentText: the uploaded document text",
                     "- fileName: the original uploaded file name, when available",
                     "",
+                    "If the host can pass uploaded PDF bytes instead of extracted text, call extract_submission with:",
+                    "- documentBase64: the base64 encoded PDF bytes",
+                    "- mimeType: application/pdf",
+                    "- fileName: the original uploaded PDF file name",
+                    "",
                     "Return the extracted insured, broker, risk and data-quality fields. Also call classify_document first if the document has not already been classified in this chat."
                 ].join("\n")
             }
@@ -121,8 +187,11 @@ server.prompt("create_quote", "Create a quote from the extracted submission and 
                 text: [
                     "Use the submission-intake MCP server to create a quote shell from the uploaded broker submission.",
                     "",
-                    "If structured submission data has not already been extracted in this chat, call extract_submission first using the uploaded document text and file name.",
-                    "Then call create_quote with the extracted submission payload.",
+                    "If this is a property owners package submission, call extract_property_submission first and then call create_quote with:",
+                    "- productSubmission: the extracted property submission envelope",
+                    "",
+                    "For generic commercial combined submissions, call extract_submission first and then call create_quote with:",
+                    "- submission: the extracted generic submission payload",
                     "",
                     "Return the quote id, status, key extracted details and data-quality warnings. The quote record UI should render inline as an MCP App iframe."
                 ].join("\n")
@@ -130,45 +199,61 @@ server.prompt("create_quote", "Create a quote from the extracted submission and 
         }
     ]
 }));
-server.tool("classify_document", "Classify an insurance document and recommend whether it should be processed as a submission.", DocumentInputSchema, async ({ documentText, fileName }) => {
-    const classification = await classifySubmission(documentText);
-    const sourceFile = fileName ?? "Claude prompt upload";
+server.tool("classify_document", "Classify an insurance document and recommend whether it should be processed as a submission.", DocumentInputSchema, async (input) => {
+    const parsedDocument = await parseDocumentInput(input);
+    const classification = await classifySubmission(parsedDocument.text);
+    const sourceFile = parsedDocument.sourceFile;
     return {
-        content: [{ type: "text", text: JSON.stringify({ sourceFile, ...classification }, null, 2) }],
-        structuredContent: { sourceFile, ...classification }
+        content: [{ type: "text", text: JSON.stringify({ sourceFile, parser: parsedDocument.parser, ...classification }, null, 2) }],
+        structuredContent: { sourceFile, parser: parsedDocument.parser, ...classification }
     };
 });
-server.tool("extract_submission", "Extract structured commercial insurance submission data from a document.", DocumentInputSchema, async ({ documentText, fileName }) => {
-    const submission = SubmissionSchema.parse(await extractSubmissionFromText(fileName ?? "Claude prompt upload", documentText));
+server.tool("extract_submission", "Extract structured commercial insurance submission data from a document.", DocumentInputSchema, async (input) => {
+    const parsedDocument = await parseDocumentInput(input);
+    const submission = SubmissionSchema.parse(await extractSubmissionFromText(parsedDocument.sourceFile, parsedDocument.text));
     return {
         content: [{ type: "text", text: JSON.stringify(submission, null, 2) }],
         structuredContent: submission
     };
 });
+server.tool("extract_property_submission", "Extract property owners package datapoints from a broker submission and validate them against the property schema.", DocumentInputSchema, async (input) => {
+    const parsedDocument = await parseDocumentInput(input);
+    const propertySubmission = PropertyOwnersSubmissionEnvelopeSchema.parse(await extractPropertySubmissionFromText(parsedDocument.sourceFile, parsedDocument.text));
+    return {
+        content: [{ type: "text", text: propertySubmissionMarkdown(propertySubmission) }],
+        structuredContent: propertySubmission
+    };
+});
 registerAppTool(server, "create_quote", {
     title: "Create Quote",
-    description: "Create a quote shell from extracted submission data and render the quote record UI inline.",
+    description: "Create a quote shell from extracted generic or product-specific submission data and render the quote record UI inline.",
     inputSchema: {
-        submission: SubmissionSchema.describe("Structured submission payload returned from extract_submission")
+        submission: SubmissionSchema.optional().describe("Structured generic submission payload returned from extract_submission"),
+        productSubmission: ProductSubmissionEnvelopeSchema.optional().describe("Product-specific submission envelope returned from a product extractor such as extract_property_submission")
     },
     _meta: {
         ui: { resourceUri: quoteRecordResourceUri }
     }
-}, async ({ submission }) => {
-    const quoteId = `Q-POC-${randomUUID().slice(0, 8).toUpperCase()}`;
-    const quote = QuoteSchema.parse({
-        quoteId,
-        status: "Draft",
-        createdAt: new Date().toISOString(),
-        insured: submission.insured,
-        broker: submission.broker,
-        risk: submission.risk,
-        dataQuality: submission.dataQuality
-    });
+}, async ({ submission, productSubmission }) => {
+    if (!submission && !productSubmission) {
+        throw new Error("Provide either submission or productSubmission.");
+    }
+    const quote = productSubmission
+        ? quoteFromProductSubmission(productSubmission)
+        : QuoteSchema.parse({
+            quoteId: `Q-POC-${randomUUID().slice(0, 8).toUpperCase()}`,
+            status: "Draft",
+            createdAt: new Date().toISOString(),
+            productType: "generic_commercial",
+            insured: submission?.insured,
+            broker: submission?.broker,
+            risk: submission?.risk,
+            dataQuality: submission?.dataQuality
+        });
     await saveQuote(quote);
     return {
         content: [
-            { type: "text", text: `Quote ${quoteId} created. The quote record UI is rendered inline in Claude.` }
+            { type: "text", text: `Quote ${quote.quoteId} created. The quote record UI is rendered inline in Claude.` }
         ],
         structuredContent: quote
     };
