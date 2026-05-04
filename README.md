@@ -154,21 +154,23 @@ Then ask:
 Create a quote shell from the extracted submission and show me the quote record UI.
 ```
 
-You can also run the workflow with MCP prompts as slash commands after attaching the submission file:
+The MCP server also exposes prompts named:
 
 ```text
-/upload_submission
-/extract_submission
-/create_quote
+upload_submission
+extract_submission
+create_quote
 ```
 
-Depending on your Claude Desktop version, MCP prompts may appear under the server name:
+Claude Desktop discovers these prompts during MCP startup, but some Claude Desktop versions do not show local MCP prompts in the chat slash-command menu. If they do appear in your client, they may be shown under the server name:
 
 ```text
 /submission-intake:upload_submission
 /submission-intake:extract_submission
 /submission-intake:create_quote
 ```
+
+If the slash commands are not visible, use the natural-language prompts above instead. Claude Desktop can still call the `classify_document`, `extract_submission` and `create_quote` MCP tools from the connected server.
 
 Claude should call the MCP tools and render the quote record UI inline in the conversation as an MCP App iframe. The status buttons in the embedded UI call the `update_quote_status` MCP tool.
 
