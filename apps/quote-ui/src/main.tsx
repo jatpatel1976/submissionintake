@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { AlertTriangle, CheckCircle2, FileText, Send, ShieldCheck } from "lucide-react";
 import "./styles.css";
 
@@ -13,19 +14,59 @@ type Quote = {
   dataQuality: { missingFields: string[]; warnings: string[]; confidence: number };
 };
 
+type ToolResult = {
+  structuredContent?: unknown;
+};
+
 const API_BASE = "http://localhost:8787";
+const isEmbeddedMcpApp = window.parent !== window;
 
 function formatCurrency(value?: number) {
   if (!value) return "Missing";
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
 }
 
+function quoteFromToolResult(result: ToolResult): Quote | null {
+  const structuredContent = result.structuredContent as Quote | { quote?: Quote } | undefined;
+  if (!structuredContent) return null;
+  if ("quoteId" in structuredContent) return structuredContent;
+  if ("quote" in structuredContent && structuredContent.quote) return structuredContent.quote;
+  return null;
+}
+
 function useQuote() {
   const [quote, setQuote] = React.useState<Quote | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const quoteId = new URLSearchParams(window.location.search).get("quoteId");
+  const [isConnecting, setIsConnecting] = React.useState(isEmbeddedMcpApp);
+  const mcpAppRef = React.useRef<McpApp | null>(null);
 
   React.useEffect(() => {
+    if (isEmbeddedMcpApp) {
+      const app = new McpApp({ name: "Quote Record", version: "0.1.0" });
+      mcpAppRef.current = app;
+
+      app.ontoolresult = (result) => {
+        const nextQuote = quoteFromToolResult(result);
+        if (nextQuote) {
+          setQuote(nextQuote);
+          setError(null);
+        }
+      };
+
+      app.connect()
+        .then(() => setIsConnecting(false))
+        .catch((err) => {
+          setIsConnecting(false);
+          setError(err instanceof Error ? err.message : "Unable to connect to Claude.");
+        });
+
+      return () => {
+        mcpAppRef.current = null;
+        void app.close();
+      };
+    }
+
+    const quoteId = new URLSearchParams(window.location.search).get("quoteId");
     if (!quoteId) {
       setError("No quoteId provided in the URL.");
       return;
@@ -37,10 +78,21 @@ function useQuote() {
       })
       .then(setQuote)
       .catch((err) => setError(err.message));
-  }, [quoteId]);
+  }, []);
 
   async function updateStatus(status: Quote["status"]) {
     if (!quote) return;
+
+    if (mcpAppRef.current) {
+      const result = await mcpAppRef.current.callServerTool({
+        name: "update_quote_status",
+        arguments: { quoteId: quote.quoteId, status }
+      });
+      const nextQuote = quoteFromToolResult(result);
+      if (nextQuote) setQuote(nextQuote);
+      return;
+    }
+
     const res = await fetch(`${API_BASE}/api/quotes/${quote.quoteId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -49,14 +101,14 @@ function useQuote() {
     setQuote(await res.json());
   }
 
-  return { quote, error, updateStatus };
+  return { quote, error, isConnecting, updateStatus };
 }
 
 function App() {
-  const { quote, error, updateStatus } = useQuote();
+  const { quote, error, isConnecting, updateStatus } = useQuote();
 
   if (error) return <main className="shell error"><h1>Unable to load quote</h1><p>{error}</p></main>;
-  if (!quote) return <main className="shell"><h1>Loading quote record…</h1></main>;
+  if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
 
   const confidence = Math.round(quote.dataQuality.confidence * 100);
 

@@ -5,10 +5,13 @@
   "private": true,
   "scripts": {
     "dev": "tsx src/index.ts",
+    "test": "tsx --test test/**/*.test.ts",
+    "test:submission": "tsx --test test/submissionIntake.test.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.1",
     "@modelcontextprotocol/sdk": "latest",
     "cors": "latest",
     "express": "latest",

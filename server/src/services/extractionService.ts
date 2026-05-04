@@ -1,18 +1,37 @@
 import { Submission } from "../schemas/quote.schema.js";
+import { getSubmissionPlaybook, SubmissionPlaybook } from "./submissionPlaybook.js";
 
-function findMoney(text: string): number | undefined {
-  const match = text.match(/(?:turnover|revenue)\D{0,20}£?([\d,]+)/i);
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findMoney(text: string, labels: string[]): number | undefined {
+  const labelPattern = labels.map(escapeRegex).join("|");
+  const match = text.match(new RegExp(`(?:${labelPattern})\\D{0,20}£?([\\d,]+)`, "i"));
   if (!match) return undefined;
   return Number(match[1].replace(/,/g, ""));
 }
 
-function findAfterLabel(text: string, label: string): string | undefined {
-  const regex = new RegExp(`${label}\\s*[:\\-]\\s*(.+)`, "i");
-  return text.match(regex)?.[1]?.trim();
+function findAfterAnyLabel(text: string, labels: string[]): string | undefined {
+  for (const label of labels) {
+    const regex = new RegExp(`${escapeRegex(label)}\\s*[:\\-]\\s*(.+)`, "i");
+    const value = text.match(regex)?.[1]?.trim();
+    if (value) return value;
+  }
+  return undefined;
 }
 
-export function classifySubmission(text: string) {
-  const indicators = ["insured", "broker", "claims", "turnover", "premium", "inception", "public liability", "property damage"];
+function labels(playbook: SubmissionPlaybook, field: string): string[] {
+  return playbook.labels[field] ?? [field.split(".").at(-1) ?? field];
+}
+
+export async function getSubmissionIntakeInstructions(): Promise<string> {
+  return (await getSubmissionPlaybook()).markdown;
+}
+
+export async function classifySubmission(text: string) {
+  const playbook = await getSubmissionPlaybook();
+  const indicators = playbook.classificationIndicators;
   const hits = indicators.filter((term) => text.toLowerCase().includes(term));
   const confidence = Math.min(1, hits.length / 6);
   return {
@@ -23,26 +42,28 @@ export function classifySubmission(text: string) {
   };
 }
 
-export function extractSubmissionFromText(sourceFile: string, text: string): Submission {
-  const insuredName = findAfterLabel(text, "insured") ?? "ABC Manufacturing Ltd";
-  const trade = findAfterLabel(text, "trade") ?? "Precision engineering";
-  const address = findAfterLabel(text, "address") ?? "1 Industrial Estate, Birmingham";
-  const brokerName = findAfterLabel(text, "broker") ?? "Example Broker";
-  const inceptionDate = findAfterLabel(text, "inception date") ?? "2026-06-01";
-  const turnover = findMoney(text) ?? 12500000;
-
-  const covers = ["Property Damage", "Business Interruption", "Employers Liability", "Public Liability"];
-  const missingFields = ["Claims history", "Construction type", "BI indemnity period"];
+export async function extractSubmissionFromText(sourceFile: string, text: string): Promise<Submission> {
+  const playbook = await getSubmissionPlaybook();
+  const insuredName = findAfterAnyLabel(text, labels(playbook, "insured.name")) ?? playbook.defaults["insured.name"];
+  const trade = findAfterAnyLabel(text, labels(playbook, "insured.trade")) ?? playbook.defaults["insured.trade"];
+  const address = findAfterAnyLabel(text, labels(playbook, "insured.address")) ?? playbook.defaults["insured.address"];
+  const brokerName = findAfterAnyLabel(text, labels(playbook, "broker.name")) ?? playbook.defaults["broker.name"];
+  const inceptionDate = findAfterAnyLabel(text, labels(playbook, "risk.inceptionDate")) ?? playbook.defaults["risk.inceptionDate"];
+  const turnover = findMoney(text, labels(playbook, "insured.turnover")) ?? Number(playbook.defaults["insured.turnover"]);
 
   return {
     sourceFile,
     insured: { name: insuredName, trade, address, turnover },
-    broker: { name: brokerName, contact: findAfterLabel(text, "contact") },
-    risk: { classOfBusiness: "Commercial Combined", inceptionDate, coversRequested: covers },
+    broker: { name: brokerName, contact: findAfterAnyLabel(text, labels(playbook, "broker.contact")) },
+    risk: {
+      classOfBusiness: playbook.defaults["risk.classOfBusiness"],
+      inceptionDate,
+      coversRequested: playbook.coversRequested,
+    },
     dataQuality: {
-      missingFields,
-      warnings: ["Turnover found but not split by activity"],
-      confidence: 0.86
+      missingFields: playbook.missingFields,
+      warnings: playbook.warnings,
+      confidence: Number(playbook.defaults["dataQuality.confidence"])
     }
   };
 }

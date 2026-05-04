@@ -12,8 +12,11 @@
     "build:ui": "npm --workspace apps/quote-ui run build",
     "preview:ui": "npm --workspace apps/quote-ui run preview",
     "dev:server": "npm --workspace server run dev",
+    "test:server": "npm --workspace server run test",
+    "test:submission": "npm --workspace server run test:submission",
     "build:server": "npm --workspace server run build",
     "start:server": "npm --workspace server run start",
+    "build": "npm run build:ui && npm run build:server",
     "dev": "concurrently -n UI,MCP -c blue,green \"npm run dev:ui\" \"npm run dev:server\""
   },
   "devDependencies": {
