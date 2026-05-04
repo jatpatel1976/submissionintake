@@ -7,7 +7,7 @@ import test from "node:test";
 import { classifySubmission, extractSubmissionFromText } from "../src/services/extractionService.js";
 import { parseDocumentInput } from "../src/services/documentParser.js";
 import { extractPropertySubmissionFromText } from "../src/services/propertyExtractionService.js";
-import { getQuote, saveQuote } from "../src/services/quoteRepository.js";
+import { getQuote, listQuotes, saveQuote } from "../src/services/quoteRepository.js";
 import { QuoteSchema, SubmissionSchema } from "../src/schemas/quote.schema.js";
 import { PropertyOwnersSubmissionEnvelopeSchema } from "../src/schemas/products/propertyOwners.schema.js";
 
@@ -287,6 +287,98 @@ test("produces quote-shaped output from an extracted submission", async () => {
     "Turnover found but not split by activity",
     "Broker submission contains fields marked as pending or not supplied"
   ]);
+});
+
+test("lists quote summaries and filters them by product type", async () => {
+  const originalQuoteDataDir = process.env.QUOTE_DATA_DIR;
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "submission-intake-quote-list-"));
+
+  try {
+    process.env.QUOTE_DATA_DIR = tempRoot;
+
+    const genericQuote = QuoteSchema.parse({
+      quoteId: "Q-TEST-GENERIC",
+      status: "Draft",
+      createdAt: new Date("2026-05-03T12:00:00.000Z").toISOString(),
+      productType: "generic_commercial",
+      insured: { name: "ABC Manufacturing Ltd" },
+      broker: { name: "Example Broker" },
+      risk: {
+        classOfBusiness: "Commercial Combined",
+        coversRequested: ["Property Damage"]
+      },
+      dataQuality: {
+        missingFields: [],
+        warnings: [],
+        confidence: 0.9
+      }
+    });
+    const propertySubmission = PropertyOwnersSubmissionEnvelopeSchema.parse({
+      productType: "property_owners",
+      common: {
+        insured: { name: "Marwick Row Estates Ltd", trade: "Property Owners", turnover: 8700000 },
+        broker: { name: "Aster Risk Partners", contact: "Marina Patel" },
+        risk: {
+          classOfBusiness: "Property Owners Package",
+          inceptionDate: "2026-06-01",
+          coversRequested: ["Property Damage", "Property Owners Liability"]
+        }
+      },
+      productData: {
+        product: "Property Owners Package",
+        insured: { name: "Marwick Row Estates Ltd", revenueOrTurnover: 8700000 },
+        broker: { name: "Aster Risk Partners", contact: "Marina Patel" },
+        coverage: {
+          buildingsAndLandlordContents: 96450000,
+          propertyOwnersLiability: 10000000
+        },
+        locations: [{ name: "17-25 Marwick Row, London SE1", tiv: 28400000 }],
+        lossHistory: [],
+        attachments: [],
+        underwriting: {}
+      },
+      dataQuality: {
+        missingFields: [],
+        warnings: [],
+        confidence: 0.94
+      }
+    });
+    const propertyQuote = QuoteSchema.parse({
+      quoteId: "Q-TEST-PROPERTY",
+      status: "In Review",
+      createdAt: new Date("2026-05-04T12:00:00.000Z").toISOString(),
+      productType: "property_owners",
+      insured: propertySubmission.common.insured,
+      broker: propertySubmission.common.broker,
+      risk: propertySubmission.common.risk,
+      dataQuality: propertySubmission.dataQuality,
+      productSubmission: propertySubmission
+    });
+
+    await saveQuote(genericQuote);
+    await saveQuote(propertyQuote);
+
+    const allQuotes = await listQuotes();
+    const propertyQuotes = await listQuotes("property_owners");
+
+    assert.deepEqual(allQuotes.map((quote) => quote.quoteId), ["Q-TEST-PROPERTY", "Q-TEST-GENERIC"]);
+    assert.deepEqual(propertyQuotes, [{
+      quoteId: "Q-TEST-PROPERTY",
+      status: "In Review",
+      createdAt: "2026-05-04T12:00:00.000Z",
+      productType: "property_owners",
+      insuredName: "Marwick Row Estates Ltd",
+      brokerName: "Aster Risk Partners",
+      classOfBusiness: "Property Owners Package"
+    }]);
+  } finally {
+    if (originalQuoteDataDir === undefined) {
+      delete process.env.QUOTE_DATA_DIR;
+    } else {
+      process.env.QUOTE_DATA_DIR = originalQuoteDataDir;
+    }
+    await fs.rm(tempRoot, { force: true, recursive: true });
+  }
 });
 
 test("persists quotes when the server is launched from another working directory", async () => {

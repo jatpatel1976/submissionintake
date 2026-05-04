@@ -14,6 +14,7 @@ Use this playbook to classify broker submission documents and extract either a g
 - For generic submissions, create a draft quote from the extracted submission with create_quote.
 - For property owners submissions, create a draft quote with create_quote and pass the extracted property envelope as productSubmission so the location schedule and property-specific datapoints are stored on the quote.
 - Render the embedded quote record MCP App for review.
+- To browse existing records, call get_quote without quoteId and optionally pass productType. Use quoteId only when retrieving one selected quote.
 
 ## Classification Indicators
 

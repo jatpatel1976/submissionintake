@@ -7,10 +7,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { getQuote, saveQuote, updateQuote } from "./services/quoteRepository.js";
+import { getQuote, listQuotes, saveQuote, updateQuote } from "./services/quoteRepository.js";
 import { classifySubmission, extractSubmissionFromText, getSubmissionIntakeInstructions } from "./services/extractionService.js";
 import { parseDocumentInput } from "./services/documentParser.js";
 import { QuoteSchema, SubmissionSchema } from "./schemas/quote.schema.js";
+import { ProductTypeSchema } from "./schemas/common.schema.js";
 import { ProductSubmissionEnvelopeSchema } from "./schemas/productSubmission.schema.js";
 import { PropertyOwnersSubmissionEnvelopeSchema } from "./schemas/products/propertyOwners.schema.js";
 import { extractPropertySubmissionFromText } from "./services/propertyExtractionService.js";
@@ -20,6 +21,17 @@ const api = express();
 api.use(cors());
 api.use(express.json());
 api.get("/api/health", (_req, res) => res.json({ ok: true }));
+api.get("/api/quotes", async (req, res) => {
+    try {
+        const productType = typeof req.query.productType === "string"
+            ? ProductTypeSchema.parse(req.query.productType)
+            : undefined;
+        res.json({ quotes: await listQuotes(productType), productType });
+    }
+    catch (error) {
+        res.status(400).json({ error: error instanceof Error ? error.message : "Invalid quote list request" });
+    }
+});
 api.get("/api/quotes/:quoteId", async (req, res) => {
     try {
         res.json(await getQuote(req.params.quoteId));
@@ -199,6 +211,28 @@ server.prompt("create_quote", "Create a quote from the extracted submission and 
         }
     ]
 }));
+server.prompt("get_quote", "Browse quotes by product or retrieve a quote by id.", () => ({
+    description: "List quotes for selection in the embedded quote UI, optionally filtered by product type.",
+    messages: [
+        {
+            role: "user",
+            content: {
+                type: "text",
+                text: [
+                    "Use the submission-intake MCP server to browse quote records.",
+                    "",
+                    "To list quotes, call get_quote with optional:",
+                    "- productType: generic_commercial or property_owners",
+                    "",
+                    "To retrieve one quote directly, call get_quote with:",
+                    "- quoteId: the quote id",
+                    "",
+                    "When listing quotes, render the embedded quote record UI so I can select a quote and view the details."
+                ].join("\n")
+            }
+        }
+    ]
+}));
 server.tool("classify_document", "Classify an insurance document and recommend whether it should be processed as a submission.", DocumentInputSchema, async (input) => {
     const parsedDocument = await parseDocumentInput(input);
     const classification = await classifySubmission(parsedDocument.text);
@@ -258,11 +292,28 @@ registerAppTool(server, "create_quote", {
         structuredContent: quote
     };
 });
-server.tool("get_quote", "Retrieve a quote record by quote id.", { quoteId: z.string() }, async ({ quoteId }) => {
-    const quote = await getQuote(quoteId);
+registerAppTool(server, "get_quote", {
+    title: "Get Quote",
+    description: "Retrieve a quote by id or list quotes for selection, optionally filtered by product type.",
+    inputSchema: {
+        quoteId: z.string().optional(),
+        productType: ProductTypeSchema.optional()
+    },
+    _meta: {
+        ui: { resourceUri: quoteRecordResourceUri }
+    }
+}, async ({ quoteId, productType }) => {
+    if (quoteId) {
+        const quote = await getQuote(quoteId);
+        return {
+            content: [{ type: "text", text: JSON.stringify(quote, null, 2) }],
+            structuredContent: quote
+        };
+    }
+    const quotes = await listQuotes(productType);
     return {
-        content: [{ type: "text", text: JSON.stringify(quote, null, 2) }],
-        structuredContent: quote
+        content: [{ type: "text", text: JSON.stringify({ productType, quotes }, null, 2) }],
+        structuredContent: { productType, quotes }
     };
 });
 server.tool("update_quote_status", "Update the quote status.", { quoteId: z.string(), status: z.enum(["Draft", "In Review", "Quoted", "Declined"]) }, async ({ quoteId, status }) => {

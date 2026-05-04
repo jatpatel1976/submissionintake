@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { AlertTriangle, CheckCircle2, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
 import "./styles.css";
 
 type Quote = {
@@ -22,6 +22,16 @@ type Quote = {
     confidence: number;
     evidence?: Array<{ field: string; label?: string; evidence?: string; confidence: number }>;
   };
+};
+
+type QuoteSummary = {
+  quoteId: string;
+  status: Quote["status"];
+  createdAt: string;
+  productType: Quote["productType"];
+  insuredName?: string;
+  brokerName?: string;
+  classOfBusiness?: string;
 };
 
 type PropertyOwnersProductData = {
@@ -63,21 +73,32 @@ function formatCurrency(value?: number) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
 }
 
+function formatProductType(productType: Quote["productType"]) {
+  if (productType === "property_owners") return "Property Owners";
+  return "Generic Commercial";
+}
+
 function getPropertyData(quote: Quote): PropertyOwnersProductData | null {
   if (quote.productSubmission?.productType === "property_owners") return quote.productSubmission.productData;
   return null;
 }
 
 function quoteFromToolResult(result: ToolResult): Quote | null {
-  const structuredContent = result.structuredContent as Quote | { quote?: Quote } | undefined;
-  if (!structuredContent) return null;
+  const structuredContent = result.structuredContent as Quote | undefined;
+  if (!structuredContent || typeof structuredContent !== "object") return null;
   if ("quoteId" in structuredContent) return structuredContent;
-  if ("quote" in structuredContent && structuredContent.quote) return structuredContent.quote;
   return null;
+}
+
+function quoteListFromToolResult(result: ToolResult): QuoteSummary[] | null {
+  const structuredContent = result.structuredContent as { quotes?: QuoteSummary[] } | undefined;
+  if (!structuredContent?.quotes) return null;
+  return structuredContent.quotes;
 }
 
 function useQuote() {
   const [quote, setQuote] = React.useState<Quote | null>(null);
+  const [quoteList, setQuoteList] = React.useState<QuoteSummary[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [isConnecting, setIsConnecting] = React.useState(isEmbeddedMcpApp);
   const mcpAppRef = React.useRef<McpApp | null>(null);
@@ -88,9 +109,18 @@ function useQuote() {
       mcpAppRef.current = app;
 
       app.ontoolresult = (result) => {
+        const nextQuoteList = quoteListFromToolResult(result);
+        if (nextQuoteList) {
+          setQuoteList(nextQuoteList);
+          setQuote(null);
+          setError(null);
+          return;
+        }
+
         const nextQuote = quoteFromToolResult(result);
         if (nextQuote) {
           setQuote(nextQuote);
+          setQuoteList(null);
           setError(null);
         }
       };
@@ -110,7 +140,13 @@ function useQuote() {
 
     const quoteId = new URLSearchParams(window.location.search).get("quoteId");
     if (!quoteId) {
-      setError("No quoteId provided in the URL.");
+      fetch(`${API_BASE}/api/quotes`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Unable to load quotes");
+          return res.json();
+        })
+        .then((data) => setQuoteList(data.quotes))
+        .catch((err) => setError(err.message));
       return;
     }
     fetch(`${API_BASE}/api/quotes/${quoteId}`)
@@ -121,6 +157,48 @@ function useQuote() {
       .then(setQuote)
       .catch((err) => setError(err.message));
   }, []);
+
+  async function loadQuote(quoteId: string) {
+    if (mcpAppRef.current) {
+      const result = await mcpAppRef.current.callServerTool({
+        name: "get_quote",
+        arguments: { quoteId }
+      });
+      const nextQuote = quoteFromToolResult(result);
+      if (nextQuote) {
+        setQuote(nextQuote);
+        setQuoteList(null);
+      }
+      return;
+    }
+
+    const res = await fetch(`${API_BASE}/api/quotes/${quoteId}`);
+    if (!res.ok) throw new Error("Quote not found");
+    setQuote(await res.json());
+    setQuoteList(null);
+  }
+
+  async function loadQuoteList(productType?: Quote["productType"]) {
+    if (mcpAppRef.current) {
+      const result = await mcpAppRef.current.callServerTool({
+        name: "get_quote",
+        arguments: { productType }
+      });
+      const nextQuoteList = quoteListFromToolResult(result);
+      if (nextQuoteList) {
+        setQuoteList(nextQuoteList);
+        setQuote(null);
+      }
+      return;
+    }
+
+    const params = productType ? `?productType=${encodeURIComponent(productType)}` : "";
+    const res = await fetch(`${API_BASE}/api/quotes${params}`);
+    if (!res.ok) throw new Error("Unable to load quotes");
+    const data = await res.json();
+    setQuoteList(data.quotes);
+    setQuote(null);
+  }
 
   async function updateStatus(status: Quote["status"]) {
     if (!quote) return;
@@ -164,7 +242,7 @@ function useQuote() {
     setQuote(await res.json());
   }
 
-  return { quote, error, isConnecting, updateStatus, updateQuote };
+  return { quote, quoteList, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote };
 }
 
 type InsuredEditorProps = {
@@ -344,10 +422,85 @@ function ProductPanels({ quote }: { quote: Quote }) {
   return null;
 }
 
+type QuoteBrowserProps = {
+  quotes: QuoteSummary[];
+  onSelect: (quoteId: string) => Promise<void>;
+  onFilter: (productType?: Quote["productType"]) => Promise<void>;
+};
+
+function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
+  const [activeFilter, setActiveFilter] = React.useState<Quote["productType"] | "all">("all");
+
+  async function applyFilter(productType: Quote["productType"] | "all") {
+    setActiveFilter(productType);
+    await onFilter(productType === "all" ? undefined : productType);
+  }
+
+  return (
+    <main className="shell">
+      <section className="hero browser-hero">
+        <div>
+          <p className="eyebrow">Quote Browser</p>
+          <h1>Quotes</h1>
+          <p className="muted">{quotes.length} quote{quotes.length === 1 ? "" : "s"} available</p>
+        </div>
+        <div className="filter-actions" role="group" aria-label="Filter quotes by product">
+          <button className={activeFilter === "all" ? "active" : ""} type="button" onClick={() => applyFilter("all")}>All</button>
+          <button className={activeFilter === "property_owners" ? "active" : ""} type="button" onClick={() => applyFilter("property_owners")}>Property</button>
+          <button className={activeFilter === "generic_commercial" ? "active" : ""} type="button" onClick={() => applyFilter("generic_commercial")}>Generic</button>
+        </div>
+      </section>
+
+      <section className="card table-card quote-browser">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Quote</th>
+                <th>Product</th>
+                <th>Status</th>
+                <th>Insured</th>
+                <th>Broker</th>
+                <th>Class</th>
+                <th>Created</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {quotes.map((quote) => (
+                <tr key={quote.quoteId}>
+                  <td><strong>{quote.quoteId}</strong></td>
+                  <td>{formatProductType(quote.productType)}</td>
+                  <td><span className={`status compact ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span></td>
+                  <td>{quote.insuredName ?? "Missing"}</td>
+                  <td>{quote.brokerName ?? "Missing"}</td>
+                  <td>{quote.classOfBusiness ?? "Missing"}</td>
+                  <td>{new Date(quote.createdAt).toLocaleString()}</td>
+                  <td>
+                    <button className="icon-button" type="button" aria-label={`Open ${quote.quoteId}`} onClick={() => onSelect(quote.quoteId)}>
+                      <Eye size={18} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {quotes.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="empty-state">No quotes found for this filter.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function App() {
-  const { quote, error, isConnecting, updateStatus, updateQuote } = useQuote();
+  const { quote, quoteList, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote } = useQuote();
 
   if (error) return <main className="shell error"><h1>Unable to load quote</h1><p>{error}</p></main>;
+  if (quoteList) return <QuoteBrowser quotes={quoteList} onSelect={loadQuote} onFilter={loadQuoteList} />;
   if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
 
   const confidence = Math.round(quote.dataQuality.confidence * 100);

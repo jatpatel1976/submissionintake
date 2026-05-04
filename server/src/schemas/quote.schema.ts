@@ -10,17 +10,42 @@ export const SubmissionSchema = z.object({
   dataQuality: DataQualitySchema
 });
 
-export const QuoteSchema = z.object({
+export const QuoteStatusSchema = z.enum(["Draft", "In Review", "Quoted", "Declined"]);
+
+const BaseQuoteSchema = z.object({
   quoteId: z.string(),
-  status: z.enum(["Draft", "In Review", "Quoted", "Declined"]),
+  status: QuoteStatusSchema,
   createdAt: z.string(),
-  productType: ProductTypeSchema,
   insured: InsuredSchema,
   broker: BrokerSchema.optional(),
   risk: RiskSchema,
-  dataQuality: DataQualitySchema,
-  productSubmission: ProductSubmissionEnvelopeSchema.optional()
+  dataQuality: DataQualitySchema
+});
+
+export const GenericQuoteSchema = BaseQuoteSchema.extend({
+  productType: z.literal("generic_commercial")
+});
+
+export const ProductQuoteSchema = BaseQuoteSchema.extend({
+  productType: z.literal("property_owners"),
+  productSubmission: ProductSubmissionEnvelopeSchema
+});
+
+export const QuoteSchema = z.discriminatedUnion("productType", [
+  GenericQuoteSchema,
+  ProductQuoteSchema
+]);
+
+export const QuoteSummarySchema = z.object({
+  quoteId: z.string(),
+  status: QuoteStatusSchema,
+  createdAt: z.string(),
+  productType: ProductTypeSchema,
+  insuredName: z.string().optional(),
+  brokerName: z.string().optional(),
+  classOfBusiness: z.string().optional()
 });
 
 export type Submission = z.infer<typeof SubmissionSchema>;
 export type Quote = z.infer<typeof QuoteSchema>;
+export type QuoteSummary = z.infer<typeof QuoteSummarySchema>;

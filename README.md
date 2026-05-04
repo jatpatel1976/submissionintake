@@ -5,7 +5,7 @@ This repo is a runnable proof of concept for an AI-native insurance submission i
 It includes:
 
 - A local MCP server for Claude Desktop
-- Tools to classify a document, extract submission data from pasted text or machine-readable PDFs, create a quote and retrieve/update the quote
+- Tools to classify a document, extract submission data from pasted text or machine-readable PDFs, create a quote, browse quotes and retrieve/update a quote
 - A React/Vite quote record UI embedded inline in Claude as an MCP App iframe
 - A Markdown submission intake playbook that drives classification indicators, extraction labels, defaults and data quality checks
 - A sample broker submission text file you can upload or attach in Claude Desktop
@@ -160,6 +160,7 @@ The MCP server also exposes prompts named:
 upload_submission
 extract_submission
 create_quote
+get_quote
 ```
 
 Claude Desktop discovers these prompts during MCP startup, but some Claude Desktop versions do not show local MCP prompts in the chat slash-command menu. If they do appear in your client, they may be shown under the server name:
@@ -168,11 +169,20 @@ Claude Desktop discovers these prompts during MCP startup, but some Claude Deskt
 /submission-intake:upload_submission
 /submission-intake:extract_submission
 /submission-intake:create_quote
+/submission-intake:get_quote
 ```
 
-If the slash commands are not visible, use the natural-language prompts above instead. Claude Desktop can still call the `classify_document`, `extract_submission` and `create_quote` MCP tools from the connected server.
+If the slash commands are not visible, use the natural-language prompts above instead. Claude Desktop can still call the `classify_document`, `extract_submission`, `create_quote` and `get_quote` MCP tools from the connected server.
 
 Claude should call the MCP tools and render the quote record UI inline in the conversation as an MCP App iframe. The status buttons in the embedded UI call the `update_quote_status` MCP tool.
+
+To browse existing quotes, ask Claude:
+
+```text
+Use get_quote to list property_owners quotes and show the quote UI.
+```
+
+Calling `get_quote` without a `quoteId` returns a quote list, optionally filtered by `productType`. Selecting a row in the embedded UI retrieves the full quote details.
 
 The MCP tools expect Claude to pass the uploaded document text from the prompt into the tool call. They no longer require or accept an absolute local file path for submission processing.
 

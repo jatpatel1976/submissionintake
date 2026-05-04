@@ -11,6 +11,7 @@ h3 { margin: 18px 0 8px; font-size: 14px; color: #526071; }
 .status { padding: 10px 16px; border-radius: 999px; font-weight: 800; background: #eef4ff; border: 1px solid #c7d7fe; color: #3145b7; }
 .status.quoted { background: #ecfdf3; border-color: #abefc6; color: #067647; }
 .status.declined { background: #fef3f2; border-color: #fecdca; color: #b42318; }
+.status.compact { display: inline-flex; padding: 6px 10px; font-size: 12px; white-space: nowrap; }
 .summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 18px 0; }
 .metric-card { display: grid; gap: 8px; background: #fff; border: 1px solid #d9e3f0; border-radius: 20px; padding: 18px; }
 .metric-card svg { color: #4961e8; }
@@ -42,5 +43,13 @@ button { display: inline-flex; align-items: center; gap: 8px; margin: 0 10px 10p
 .icon-button { justify-content: center; width: 40px; height: 40px; margin: 0; padding: 0; border-radius: 10px; }
 button:disabled { cursor: not-allowed; opacity: 0.55; }
 button:hover { background: #f8fafc; }
+.filter-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.filter-actions button { margin: 0; min-height: 42px; border-radius: 999px; }
+.filter-actions button.active { background: #172033; border-color: #172033; color: #fff; }
+.browser-hero { margin-bottom: 18px; }
+.quote-browser { grid-column: auto; }
+.quote-browser table { min-width: 1040px; }
+.quote-browser .icon-button { margin: 0; }
+.empty-state { color: #667085; font-weight: 700; text-align: center; }
 .error { color: #b42318; }
 @media (max-width: 820px) { .summary-grid, .content-grid { grid-template-columns: 1fr; } .actions, .property-summary, .table-card { grid-column: auto; } .hero { align-items: flex-start; flex-direction: column; } }
