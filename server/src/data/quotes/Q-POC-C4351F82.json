@@ -1,0 +1,36 @@
+{
+  "quoteId": "Q-POC-C4351F82",
+  "status": "In Review",
+  "createdAt": "2026-05-04T15:08:54.636Z",
+  "insured": {
+    "name": "ABCD Manufacturing Limited",
+    "trade": "Precision engineering",
+    "address": "1 Industrial Estate, Birmingham",
+    "turnover": 12500000
+  },
+  "broker": {
+    "name": "Example Broker",
+    "contact": "jane.smith@examplebroker.co.uk"
+  },
+  "risk": {
+    "classOfBusiness": "Commercial Combined",
+    "inceptionDate": "2026-06-01",
+    "coversRequested": [
+      "Property Damage",
+      "Business Interruption",
+      "Employers Liability",
+      "Public Liability"
+    ]
+  },
+  "dataQuality": {
+    "missingFields": [
+      "Claims history",
+      "Construction type",
+      "BI indemnity period"
+    ],
+    "warnings": [
+      "Turnover found but not split by activity"
+    ],
+    "confidence": 0.86
+  }
+}

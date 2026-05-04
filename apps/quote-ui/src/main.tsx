@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { AlertTriangle, CheckCircle2, FileText, Send, ShieldCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
 import "./styles.css";
 
 type Quote = {
@@ -101,11 +101,119 @@ function useQuote() {
     setQuote(await res.json());
   }
 
-  return { quote, error, isConnecting, updateStatus };
+  async function updateQuote(patch: Pick<Partial<Quote>, "insured" | "broker" | "risk">) {
+    if (!quote) return;
+
+    if (mcpAppRef.current) {
+      const result = await mcpAppRef.current.callServerTool({
+        name: "update_quote",
+        arguments: { quoteId: quote.quoteId, ...patch }
+      });
+      const nextQuote = quoteFromToolResult(result);
+      if (nextQuote) setQuote(nextQuote);
+      return;
+    }
+
+    const res = await fetch(`${API_BASE}/api/quotes/${quote.quoteId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    setQuote(await res.json());
+  }
+
+  return { quote, error, isConnecting, updateStatus, updateQuote };
+}
+
+type InsuredEditorProps = {
+  quote: Quote;
+  onSave: (patch: Pick<Partial<Quote>, "insured">) => Promise<void>;
+};
+
+function InsuredEditor({ quote, onSave }: InsuredEditorProps) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [name, setName] = React.useState(quote.insured.name ?? "");
+  const [trade, setTrade] = React.useState(quote.insured.trade ?? "");
+  const [address, setAddress] = React.useState(quote.insured.address ?? "");
+  const [turnover, setTurnover] = React.useState(quote.insured.turnover?.toString() ?? "");
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  function resetForm() {
+    setName(quote.insured.name ?? "");
+    setTrade(quote.insured.trade ?? "");
+    setAddress(quote.insured.address ?? "");
+    setTurnover(quote.insured.turnover?.toString() ?? "");
+  }
+
+  async function saveInsured(event: React.FormEvent) {
+    event.preventDefault();
+    setIsSaving(true);
+    const turnoverValue = Number(turnover.replace(/[£,\s]/g, ""));
+
+    try {
+      await onSave({
+        insured: {
+          name: name.trim() || undefined,
+          trade: trade.trim() || undefined,
+          address: address.trim() || undefined,
+          turnover: Number.isFinite(turnoverValue) && turnover.trim() ? turnoverValue : undefined
+        }
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  if (isEditing) {
+    return (
+      <article className="card">
+        <form className="edit-form" onSubmit={saveInsured}>
+          <div className="card-heading">
+            <h2>Insured</h2>
+            <div className="icon-actions">
+              <button className="icon-button" type="submit" aria-label="Save insured" disabled={isSaving}><Save size={18} /></button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Cancel editing insured"
+                onClick={() => {
+                  resetForm();
+                  setIsEditing(false);
+                }}
+                disabled={isSaving}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+          <label>Name<input value={name} onChange={(event) => setName(event.target.value)} /></label>
+          <label>Trade<input value={trade} onChange={(event) => setTrade(event.target.value)} /></label>
+          <label>Address<input value={address} onChange={(event) => setAddress(event.target.value)} /></label>
+          <label>Turnover<input inputMode="decimal" value={turnover} onChange={(event) => setTurnover(event.target.value)} /></label>
+        </form>
+      </article>
+    );
+  }
+
+  return (
+    <article className="card">
+      <div className="card-heading">
+        <h2>Insured</h2>
+        <button className="icon-button" type="button" aria-label="Edit insured" onClick={() => setIsEditing(true)}><Pencil size={18} /></button>
+      </div>
+      <dl>
+        <dt>Name</dt><dd>{quote.insured.name ?? "Missing"}</dd>
+        <dt>Trade</dt><dd>{quote.insured.trade ?? "Missing"}</dd>
+        <dt>Address</dt><dd>{quote.insured.address ?? "Missing"}</dd>
+        <dt>Turnover</dt><dd>{formatCurrency(quote.insured.turnover)}</dd>
+      </dl>
+    </article>
+  );
 }
 
 function App() {
-  const { quote, error, isConnecting, updateStatus } = useQuote();
+  const { quote, error, isConnecting, updateStatus, updateQuote } = useQuote();
 
   if (error) return <main className="shell error"><h1>Unable to load quote</h1><p>{error}</p></main>;
   if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
@@ -131,15 +239,7 @@ function App() {
       </section>
 
       <section className="content-grid">
-        <article className="card">
-          <h2>Insured</h2>
-          <dl>
-            <dt>Name</dt><dd>{quote.insured.name ?? "Missing"}</dd>
-            <dt>Trade</dt><dd>{quote.insured.trade ?? "Missing"}</dd>
-            <dt>Address</dt><dd>{quote.insured.address ?? "Missing"}</dd>
-            <dt>Turnover</dt><dd>{formatCurrency(quote.insured.turnover)}</dd>
-          </dl>
-        </article>
+        <InsuredEditor quote={quote} onSave={updateQuote} />
 
         <article className="card">
           <h2>Broker & Risk</h2>

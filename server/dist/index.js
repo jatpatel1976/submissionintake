@@ -187,5 +187,22 @@ server.tool("update_quote_status", "Update the quote status.", { quoteId: z.stri
         structuredContent: quote
     };
 });
+server.tool("update_quote", "Update editable quote fields.", {
+    quoteId: z.string(),
+    insured: SubmissionSchema.shape.insured.optional(),
+    broker: SubmissionSchema.shape.broker.optional(),
+    risk: SubmissionSchema.shape.risk.optional()
+}, async ({ quoteId, insured, broker, risk }) => {
+    const patch = {
+        ...(insured ? { insured } : {}),
+        ...(broker ? { broker } : {}),
+        ...(risk ? { risk } : {})
+    };
+    const quote = await updateQuote(quoteId, patch);
+    return {
+        content: [{ type: "text", text: `Quote ${quoteId} updated.` }],
+        structuredContent: quote
+    };
+});
 const transport = new StdioServerTransport();
 await server.connect(transport);
