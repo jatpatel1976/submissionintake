@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { AlertTriangle, CheckCircle2, Eye, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
 import "./styles.css";
 
 type Quote = {
@@ -334,8 +334,21 @@ function InsuredEditor({ quote, onSave }: InsuredEditorProps) {
   );
 }
 
+function BrokerDetails({ quote }: { quote: Quote }) {
+  return (
+    <article className="card">
+      <h2>Broker</h2>
+      <dl>
+        <dt>Name</dt><dd>{quote.broker?.name ?? "Missing"}</dd>
+        <dt>Contact</dt><dd>{quote.broker?.contact ?? "Missing"}</dd>
+      </dl>
+    </article>
+  );
+}
+
 function PropertyOwnersPanel({ quote }: { quote: Quote }) {
   const property = getPropertyData(quote);
+  const [isLocationScheduleOpen, setIsLocationScheduleOpen] = React.useState(false);
   if (!property) return null;
 
   return (
@@ -352,35 +365,48 @@ function PropertyOwnersPanel({ quote }: { quote: Quote }) {
       </article>
 
       <article className="card table-card">
-        <h2>Location Schedule</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Location</th>
-                <th>Construction</th>
-                <th>Year</th>
-                <th>Stories</th>
-                <th>TIV</th>
-                <th>Occupancy</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {property.locations.map((location) => (
-                <tr key={location.name}>
-                  <td>{location.name}</td>
-                  <td>{location.construction ?? "Missing"}</td>
-                  <td>{location.yearBuilt ?? "Missing"}</td>
-                  <td>{location.stories ?? "Missing"}</td>
-                  <td>{formatCurrency(location.tiv)}</td>
-                  <td>{location.occupancy ?? "Missing"}</td>
-                  <td>{location.notes ?? ""}</td>
+        <button
+          className="section-toggle"
+          type="button"
+          aria-expanded={isLocationScheduleOpen}
+          onClick={() => setIsLocationScheduleOpen((isOpen) => !isOpen)}
+        >
+          <span>
+            <strong>Location Schedule</strong>
+            <small>{property.locations.length} location{property.locations.length === 1 ? "" : "s"}</small>
+          </span>
+          <ChevronDown className={isLocationScheduleOpen ? "is-open" : ""} size={18} />
+        </button>
+        {isLocationScheduleOpen && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Construction</th>
+                  <th>Year</th>
+                  <th>Stories</th>
+                  <th>TIV</th>
+                  <th>Occupancy</th>
+                  <th>Notes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {property.locations.map((location) => (
+                  <tr key={location.name}>
+                    <td>{location.name}</td>
+                    <td>{location.construction ?? "Missing"}</td>
+                    <td>{location.yearBuilt ?? "Missing"}</td>
+                    <td>{location.stories ?? "Missing"}</td>
+                    <td>{formatCurrency(location.tiv)}</td>
+                    <td>{location.occupancy ?? "Missing"}</td>
+                    <td>{location.notes ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </article>
 
       <article className="card table-card">
@@ -509,6 +535,7 @@ function App() {
   if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
 
   const confidence = Math.round(quote.dataQuality.confidence * 100);
+  const isReviewAcknowledged = reviewWorkflowState === "complete" || quote.status === "In Review";
 
   async function sendToUnderwritingReview() {
     setReviewWorkflowState("processing");
@@ -528,21 +555,22 @@ function App() {
         <span className={`status ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span>
       </section>
 
-      <section className="summary-grid">
-        <article className="metric-card"><FileText /><span>Class</span><strong>{quote.risk.classOfBusiness ?? "Missing"}</strong></article>
-        <article className="metric-card"><ShieldCheck /><span>Confidence</span><strong>{confidence}%</strong></article>
-        <article className="metric-card"><AlertTriangle /><span>Missing Fields</span><strong>{quote.dataQuality.missingFields.length}</strong></article>
-        <article className="metric-card"><CheckCircle2 /><span>Covers</span><strong>{quote.risk.coversRequested.length}</strong></article>
+      <section className="quote-summary-card" aria-label="Quote summary">
+        <div className="summary-item"><FileText size={17} /><span>Class</span><strong>{quote.risk.classOfBusiness ?? "Missing"}</strong></div>
+        <div className="summary-item"><ShieldCheck size={17} /><span>Confidence</span><strong>{confidence}%</strong></div>
+        <div className="summary-item"><AlertTriangle size={17} /><span>Missing Fields</span><strong>{quote.dataQuality.missingFields.length}</strong></div>
+        <div className="summary-item"><CheckCircle2 size={17} /><span>Covers</span><strong>{quote.risk.coversRequested.length}</strong></div>
+      </section>
+
+      <section className="party-details">
+        <InsuredEditor quote={quote} onSave={updateQuote} />
+        <BrokerDetails quote={quote} />
       </section>
 
       <section className="content-grid">
-        <InsuredEditor quote={quote} onSave={updateQuote} />
-
         <article className="card">
-          <h2>Broker & Risk</h2>
+          <h2>Risk</h2>
           <dl>
-            <dt>Broker</dt><dd>{quote.broker?.name ?? "Missing"}</dd>
-            <dt>Contact</dt><dd>{quote.broker?.contact ?? "Missing"}</dd>
             <dt>Inception Date</dt><dd>{quote.risk.inceptionDate ?? "Missing"}</dd>
           </dl>
         </article>
@@ -587,7 +615,14 @@ function App() {
 
         <article className="card actions">
           <h2>Underwriting Actions</h2>
-          <button onClick={sendToUnderwritingReview} disabled={reviewWorkflowState === "processing"}><Send size={18} /> Send to underwriting review</button>
+          <button
+            className={`review-button ${isReviewAcknowledged ? "is-complete" : ""}`}
+            onClick={sendToUnderwritingReview}
+            disabled={reviewWorkflowState === "processing"}
+          >
+            {isReviewAcknowledged ? <CheckCircle2 size={18} /> : <Send size={18} />}
+            {isReviewAcknowledged ? " Sent to underwriting review" : " Send to underwriting review"}
+          </button>
           <button onClick={() => updateStatus("Quoted")}><CheckCircle2 size={18} /> Mark as quoted</button>
           <button onClick={() => updateStatus("Declined")}><AlertTriangle size={18} /> Decline risk</button>
         </article>
