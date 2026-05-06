@@ -1,0 +1,279 @@
+{
+  "quoteId": "Q-POC-3046A92A",
+  "status": "In Review",
+  "createdAt": "2026-05-06T06:19:49.623Z",
+  "insured": {
+    "name": "Marwick Row Estates Ltd",
+    "trade": "Lessors of Nonresidential Buildings",
+    "turnover": 8700000
+  },
+  "broker": {
+    "name": "Aster Risk Partners",
+    "contact": "Marina Patel"
+  },
+  "risk": {
+    "classOfBusiness": "Property Owners Package",
+    "inceptionDate": "2026-07-01",
+    "coversRequested": [
+      "Buildings and Landlord Contents",
+      "Loss of Rent",
+      "Property Owners Liability",
+      "Terrorism",
+      "Engineering Inspection and Breakdown"
+    ]
+  },
+  "dataQuality": {
+    "missingFields": [],
+    "warnings": [
+      "Expired 2022 valuation schedule included as Appendix B — current TIVs taken from location schedule",
+      "Unresolved EWS1 wording in lender correspondence for one location (Canal House); remediation invoice attached",
+      "Terrorism requested but quote target excludes terrorism taxes — confirm pool wording applicability",
+      "Loss runs reference mixed currencies — verify GBP basis for all historical claims",
+      "Schedule of values may contain duplicate or missing asset identifiers — reconcile before binding"
+    ],
+    "confidence": 0.82,
+    "evidence": [
+      {
+        "field": "insured.name",
+        "label": "Named Insured",
+        "evidence": "Named insured: Marwick Row Estates Ltd",
+        "confidence": 0.99
+      },
+      {
+        "field": "insured.revenueOrTurnover",
+        "label": "Revenue",
+        "evidence": "Revenue / turnover: GBP 8.7m rental income",
+        "confidence": 0.95
+      },
+      {
+        "field": "coverage.buildingsAndLandlordContents",
+        "label": "Buildings TIV",
+        "evidence": "Buildings and landlord contents: GBP 96,450,000",
+        "confidence": 0.97
+      },
+      {
+        "field": "coverage.propertyOwnersLiability",
+        "label": "Liability Limit",
+        "evidence": "Property owners liability GBP 10,000,000",
+        "confidence": 0.97
+      },
+      {
+        "field": "locations",
+        "label": "Location Schedule",
+        "evidence": "5 location rows extracted from risk and exposure schedule",
+        "confidence": 0.9
+      },
+      {
+        "field": "lossHistory",
+        "label": "Loss History",
+        "evidence": "3 loss events extracted from loss history table",
+        "confidence": 0.95
+      }
+    ]
+  },
+  "productType": "property_owners",
+  "productSubmission": {
+    "sourceFile": "SUB-001_property_owners_package___mixed_use_portfolio.pdf",
+    "productType": "property_owners",
+    "common": {
+      "insured": {
+        "name": "Marwick Row Estates Ltd",
+        "trade": "Lessors of Nonresidential Buildings",
+        "turnover": 8700000
+      },
+      "broker": {
+        "name": "Aster Risk Partners",
+        "contact": "Marina Patel"
+      },
+      "risk": {
+        "classOfBusiness": "Property Owners Package",
+        "inceptionDate": "2026-07-01",
+        "coversRequested": [
+          "Buildings and Landlord Contents",
+          "Loss of Rent",
+          "Property Owners Liability",
+          "Terrorism",
+          "Engineering Inspection and Breakdown"
+        ]
+      }
+    },
+    "productData": {
+      "product": "Property Owners Package",
+      "insured": {
+        "name": "Marwick Row Estates Ltd",
+        "industryCode": "531120",
+        "revenueOrTurnover": 8700000,
+        "revenueBasis": "rental income",
+        "employees": 24,
+        "operationsOrLocations": "12 scheduled premises across London, Birmingham, Bristol"
+      },
+      "broker": {
+        "name": "Aster Risk Partners",
+        "contact": "Marina Patel",
+        "email": "marina.patel@example-broker.test",
+        "phone": "+44 20 7946 0101",
+        "submissionReference": "SUB-001",
+        "proposedEffectiveDate": "2026-07-01",
+        "marketDeadline": "15 business days from receipt"
+      },
+      "coverage": {
+        "buildingsAndLandlordContents": 96450000,
+        "lossOfRentMonths": 36,
+        "propertyOwnersLiability": 10000000,
+        "terrorismIncluded": true,
+        "engineeringInspectionAndBreakdownRequested": true
+      },
+      "locations": [
+        {
+          "name": "17-25 Marwick Row, London SE1",
+          "construction": "Masonry / steel frame",
+          "yearBuilt": 1998,
+          "stories": "8",
+          "tiv": 28400000,
+          "occupancy": "Retail ground floor; apartments above",
+          "notes": "18% unoccupied"
+        },
+        {
+          "name": "Mill Yard Works, Bristol BS2",
+          "construction": "Brick / timber joist",
+          "yearBuilt": 1890,
+          "stories": "5",
+          "tiv": 11200000,
+          "occupancy": "Grade II listed facade; restaurant tenant",
+          "notes": "Deep-fat fryers present"
+        },
+        {
+          "name": "Canal House, Birmingham B1",
+          "construction": "Concrete frame",
+          "yearBuilt": 2007,
+          "stories": "12",
+          "tiv": 22750000,
+          "occupancy": "Student accommodation",
+          "notes": "Cladding remediation completed 2024"
+        },
+        {
+          "name": "Northgate Parade, Leeds LS2",
+          "construction": "Masonry",
+          "yearBuilt": 1976,
+          "stories": "3",
+          "tiv": 7800000,
+          "occupancy": "Mixed office and convenience retail",
+          "notes": "ATM embedded"
+        },
+        {
+          "name": "11 other minor premises",
+          "construction": "Various",
+          "stories": "1-6",
+          "tiv": 26300000,
+          "occupancy": "Small offices and industrial units",
+          "notes": "Built 1960-2020"
+        }
+      ],
+      "lossHistory": [
+        {
+          "date": "2022-02-18",
+          "type": "Escape of water",
+          "paid": 186400,
+          "reserved": 0,
+          "description": "Burst riser at Canal House; tenant displacement 11 weeks"
+        },
+        {
+          "date": "2023-07-09",
+          "type": "Fire",
+          "paid": 72100,
+          "reserved": 0,
+          "description": "Bin store arson at Bristol site; CCTV upgraded"
+        },
+        {
+          "date": "2024-11-12",
+          "type": "Liability",
+          "paid": 0,
+          "reserved": 35000,
+          "description": "Slip allegation in wet entrance; denial filed"
+        }
+      ],
+      "attachments": [
+        {
+          "name": "SUB-001_completed_application.pdf",
+          "status": "Provided",
+          "potentialIssue": "May contain inconsistent answers vs cover note"
+        },
+        {
+          "name": "SUB-001_loss_runs_2021_2026.xlsx",
+          "status": "Provided",
+          "potentialIssue": "Mixed currencies and open reserves"
+        },
+        {
+          "name": "SUB-001_schedule_of_values.xlsx",
+          "status": "Provided",
+          "potentialIssue": "Duplicate or missing asset identifiers"
+        },
+        {
+          "name": "SUB-001_survey_or_financials.pdf",
+          "status": "Partial",
+          "potentialIssue": "Redactions, draft status, or expired dates"
+        },
+        {
+          "name": "SUB-001_broker_email_chain.eml",
+          "status": "Provided",
+          "potentialIssue": "Contains endorsements, subject-line changes and nested disclaimers"
+        }
+      ],
+      "underwriting": {
+        "requestedCommonRenewalDate": "2026-07-01",
+        "escapeOfWaterDeductibleCap": 25000,
+        "accountMarketingBasis": "Primary basis with optional excess layers",
+        "brokerInstructions": "Please provide terms showing gross premium, commission basis, taxes/fees, subjectivities, warranties, exclusions and any required engineering or financial information. Highlight deviations from expiring coverage. Do not bind without written confirmation from the broker."
+      }
+    },
+    "dataQuality": {
+      "missingFields": [],
+      "warnings": [
+        "Expired 2022 valuation schedule included as Appendix B — current TIVs taken from location schedule",
+        "Unresolved EWS1 wording in lender correspondence for one location (Canal House); remediation invoice attached",
+        "Terrorism requested but quote target excludes terrorism taxes — confirm pool wording applicability",
+        "Loss runs reference mixed currencies — verify GBP basis for all historical claims",
+        "Schedule of values may contain duplicate or missing asset identifiers — reconcile before binding"
+      ],
+      "confidence": 0.82,
+      "evidence": [
+        {
+          "field": "insured.name",
+          "label": "Named Insured",
+          "evidence": "Named insured: Marwick Row Estates Ltd",
+          "confidence": 0.99
+        },
+        {
+          "field": "insured.revenueOrTurnover",
+          "label": "Revenue",
+          "evidence": "Revenue / turnover: GBP 8.7m rental income",
+          "confidence": 0.95
+        },
+        {
+          "field": "coverage.buildingsAndLandlordContents",
+          "label": "Buildings TIV",
+          "evidence": "Buildings and landlord contents: GBP 96,450,000",
+          "confidence": 0.97
+        },
+        {
+          "field": "coverage.propertyOwnersLiability",
+          "label": "Liability Limit",
+          "evidence": "Property owners liability GBP 10,000,000",
+          "confidence": 0.97
+        },
+        {
+          "field": "locations",
+          "label": "Location Schedule",
+          "evidence": "5 location rows extracted from risk and exposure schedule",
+          "confidence": 0.9
+        },
+        {
+          "field": "lossHistory",
+          "label": "Loss History",
+          "evidence": "3 loss events extracted from loss history table",
+          "confidence": 0.95
+        }
+      ]
+    }
+  }
+}
