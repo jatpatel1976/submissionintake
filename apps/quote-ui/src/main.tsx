@@ -9,6 +9,7 @@ type Quote = {
   status: "Draft" | "In Review" | "Quoted" | "Declined";
   createdAt: string;
   productType: "generic_commercial" | "property_owners";
+  underwriter?: { name: string; team: string; email: string; allocatedAt: string; rationale?: string };
   insured: { name?: string; trade?: string; address?: string; turnover?: number };
   broker?: { name?: string; contact?: string };
   risk: { classOfBusiness?: string; inceptionDate?: string; coversRequested: string[] };
@@ -29,6 +30,7 @@ type QuoteSummary = {
   status: Quote["status"];
   createdAt: string;
   productType: Quote["productType"];
+  underwriterName?: string;
   insuredName?: string;
   brokerName?: string;
   classOfBusiness?: string;
@@ -462,6 +464,7 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
                 <th>Insured</th>
                 <th>Broker</th>
                 <th>Class</th>
+                <th>Underwriter</th>
                 <th>Created</th>
                 <th></th>
               </tr>
@@ -475,6 +478,7 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
                   <td>{quote.insuredName ?? "Missing"}</td>
                   <td>{quote.brokerName ?? "Missing"}</td>
                   <td>{quote.classOfBusiness ?? "Missing"}</td>
+                  <td>{quote.underwriterName ?? "Unallocated"}</td>
                   <td>{new Date(quote.createdAt).toLocaleString()}</td>
                   <td>
                     <button className="icon-button" type="button" aria-label={`Open ${quote.quoteId}`} onClick={() => onSelect(quote.quoteId)}>
@@ -485,7 +489,7 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
               ))}
               {quotes.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="empty-state">No quotes found for this filter.</td>
+                  <td colSpan={9} className="empty-state">No quotes found for this filter.</td>
                 </tr>
               )}
             </tbody>
@@ -498,12 +502,20 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
 
 function App() {
   const { quote, quoteList, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote } = useQuote();
+  const [reviewWorkflowState, setReviewWorkflowState] = React.useState<"idle" | "processing" | "complete">("idle");
 
   if (error) return <main className="shell error"><h1>Unable to load quote</h1><p>{error}</p></main>;
   if (quoteList) return <QuoteBrowser quotes={quoteList} onSelect={loadQuote} onFilter={loadQuoteList} />;
   if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
 
   const confidence = Math.round(quote.dataQuality.confidence * 100);
+
+  async function sendToUnderwritingReview() {
+    setReviewWorkflowState("processing");
+    await new Promise((resolve) => window.setTimeout(resolve, 900));
+    await updateStatus("In Review");
+    setReviewWorkflowState("complete");
+  }
 
   return (
     <main className="shell">
@@ -535,6 +547,27 @@ function App() {
           </dl>
         </article>
 
+        <article className={`card allocation-card ${reviewWorkflowState === "processing" ? "is-processing" : ""}`}>
+          <h2>Underwriter Allocation</h2>
+          {reviewWorkflowState === "processing" ? (
+            <div className="processing-state">
+              <span className="spinner" aria-hidden="true"></span>
+              <strong>Routing to underwriting review</strong>
+              <p className="muted">Checking product, class, and referral signals.</p>
+            </div>
+          ) : quote.underwriter ? (
+            <dl>
+              <dt>Name</dt><dd>{quote.underwriter.name}</dd>
+              <dt>Team</dt><dd>{quote.underwriter.team}</dd>
+              <dt>Email</dt><dd>{quote.underwriter.email}</dd>
+              <dt>Allocated</dt><dd>{new Date(quote.underwriter.allocatedAt).toLocaleString()}</dd>
+              <dt>Reason</dt><dd>{quote.underwriter.rationale ?? "Allocated for underwriting review."}</dd>
+            </dl>
+          ) : (
+            <p className="muted">No underwriter allocated yet.</p>
+          )}
+        </article>
+
         <article className="card">
           <h2>Covers Requested</h2>
           <div className="pill-list">
@@ -554,7 +587,7 @@ function App() {
 
         <article className="card actions">
           <h2>Underwriting Actions</h2>
-          <button onClick={() => updateStatus("In Review")}><Send size={18} /> Send to underwriting review</button>
+          <button onClick={sendToUnderwritingReview} disabled={reviewWorkflowState === "processing"}><Send size={18} /> Send to underwriting review</button>
           <button onClick={() => updateStatus("Quoted")}><CheckCircle2 size={18} /> Mark as quoted</button>
           <button onClick={() => updateStatus("Declined")}><AlertTriangle size={18} /> Decline risk</button>
         </article>

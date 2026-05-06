@@ -9,10 +9,18 @@ export const SubmissionSchema = z.object({
     dataQuality: DataQualitySchema
 });
 export const QuoteStatusSchema = z.enum(["Draft", "In Review", "Quoted", "Declined"]);
+export const UnderwriterAllocationSchema = z.object({
+    name: z.string(),
+    team: z.string(),
+    email: z.string(),
+    allocatedAt: z.string(),
+    rationale: z.string().optional()
+});
 const BaseQuoteSchema = z.object({
     quoteId: z.string(),
     status: QuoteStatusSchema,
     createdAt: z.string(),
+    underwriter: UnderwriterAllocationSchema.optional(),
     insured: InsuredSchema,
     broker: BrokerSchema.optional(),
     risk: RiskSchema,
@@ -34,6 +42,7 @@ export const QuoteSummarySchema = z.object({
     status: QuoteStatusSchema,
     createdAt: z.string(),
     productType: ProductTypeSchema,
+    underwriterName: z.string().optional(),
     insuredName: z.string().optional(),
     brokerName: z.string().optional(),
     classOfBusiness: z.string().optional()

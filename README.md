@@ -6,7 +6,8 @@ It includes:
 
 - A local MCP server for Claude Desktop
 - Tools to classify a document, extract submission data from pasted text or machine-readable PDFs, create a quote, browse quotes and retrieve/update a quote
-- A React/Vite quote record UI embedded inline in Claude as an MCP App iframe
+- A Claude-style dark React/Vite quote record UI embedded inline in Claude as an MCP App iframe
+- A simple underwriting review workflow that updates quote status and allocates an underwriter
 - A Markdown submission intake playbook that drives classification indicators, extraction labels, defaults and data quality checks
 - A sample broker submission text file you can upload or attach in Claude Desktop
 
@@ -77,6 +78,8 @@ npm run test:submission
 ```
 
 This reads `samples/sample-submission.txt`, classifies it, extracts structured submission data, validates the output with the Zod schemas, and checks the quote-shaped output produced from the extracted submission.
+
+The test suite also covers product-specific property owners extraction, quote listing/filtering, and the underwriter allocation applied when a quote is sent to review.
 
 ## 5. Configure Claude Desktop
 
@@ -176,6 +179,14 @@ If the slash commands are not visible, use the natural-language prompts above in
 
 Claude should call the MCP tools and render the quote record UI inline in the conversation as an MCP App iframe. The status buttons in the embedded UI call the `update_quote_status` MCP tool.
 
+To mimic a quote being processed, click:
+
+```text
+Send to underwriting review
+```
+
+The UI briefly shows a routing state, updates the quote status to `In Review`, and then displays the allocated underwriter. Underwriter allocation is handled by the server so it works in both Claude Desktop and the standalone browser UI. The quote browser also shows the allocated underwriter when one exists.
+
 To browse existing quotes, ask Claude:
 
 ```text
@@ -231,6 +242,14 @@ Use it for property owners package submissions where the broker document contain
 
 `create_quote` accepts either a generic `submission` from `extract_submission` or a product-specific `productSubmission` envelope from `extract_property_submission`. Property owners output is stored on the quote as `productType: "property_owners"`, `productSubmission` and `productData`, including `locations`, `lossHistory`, coverage details and underwriting data.
 
+When a quote is moved to `In Review`, the server adds an `underwriter` allocation to the quote record with:
+
+- Name
+- Team
+- Email
+- Allocation timestamp
+- Allocation rationale
+
 Product-specific schemas are organized around a shared envelope:
 
 ```text
@@ -251,6 +270,16 @@ apps/quote-ui/dist/index.html
 ```
 
 Run `npm run build` after React UI or server changes so Claude receives the latest embedded app and MCP server code.
+
+The embedded UI currently supports:
+
+- Browsing and filtering quotes
+- Opening a quote record
+- Editing insured details
+- Viewing property owners coverage, locations and loss history
+- Sending a quote to underwriting review
+- Viewing the allocated underwriter
+- Marking a quote as quoted or declined
 
 ## Markdown Intake Playbook
 
@@ -285,5 +314,5 @@ The TypeScript extraction service still performs the deterministic parsing and s
 - Add PostgreSQL persistence
 - Add authenticated API access
 - Add audit logging
-- Add editable fields in the embedded React UI
-- Add more MCP-backed underwriting actions
+- Add editable broker, risk and product-specific fields in the embedded React UI
+- Add more MCP-backed underwriting actions beyond status and review allocation

@@ -1,7 +1,32 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ProductType } from "../schemas/common.schema.js";
-import { Quote, QuoteSchema, QuoteSummary, QuoteSummarySchema } from "../schemas/quote.schema.js";
+import { Quote, QuoteSchema, QuoteSummary, QuoteSummarySchema, UnderwriterAllocation } from "../schemas/quote.schema.js";
+
+type UnderwriterProfile = Omit<UnderwriterAllocation, "allocatedAt" | "rationale"> & {
+  specialties: string[];
+};
+
+const UNDERWRITERS: UnderwriterProfile[] = [
+  {
+    name: "Maya Desai",
+    team: "Property Owners",
+    email: "maya.desai@internal-underwriting.example",
+    specialties: ["property_owners", "property", "real estate", "landlord"]
+  },
+  {
+    name: "Oliver Hart",
+    team: "Commercial Combined",
+    email: "oliver.hart@internal-underwriting.example",
+    specialties: ["generic_commercial", "commercial combined", "manufacturing", "engineering"]
+  },
+  {
+    name: "Priya Shah",
+    team: "Technical Referrals",
+    email: "priya.shah@internal-underwriting.example",
+    specialties: ["referral", "missing", "warning", "complex"]
+  }
+];
 
 function getQuoteDir(): string {
   return process.env.QUOTE_DATA_DIR
@@ -27,10 +52,35 @@ function summarizeQuote(quote: Quote): QuoteSummary {
     status: quote.status,
     createdAt: quote.createdAt,
     productType: quote.productType,
+    ...(quote.underwriter ? { underwriterName: quote.underwriter.name } : {}),
     insuredName: quote.insured.name,
     brokerName: quote.broker?.name,
     classOfBusiness: quote.risk.classOfBusiness
   });
+}
+
+function allocateUnderwriter(quote: Quote): UnderwriterAllocation {
+  if (quote.underwriter) return quote.underwriter;
+
+  const classOfBusiness = quote.risk.classOfBusiness?.toLowerCase() ?? "";
+  const hasReferralSignals = quote.dataQuality.missingFields.length > 2 || quote.dataQuality.warnings.length > 1;
+  const matched = UNDERWRITERS.find((underwriter) =>
+    underwriter.specialties.some((specialty) =>
+      specialty === quote.productType || classOfBusiness.includes(specialty)
+    )
+  ) ?? (hasReferralSignals ? UNDERWRITERS[2] : UNDERWRITERS[1]);
+
+  const rationale = hasReferralSignals
+    ? "Allocated for underwriting review with data-quality referral points."
+    : `Allocated based on ${quote.risk.classOfBusiness ?? quote.productType} appetite.`;
+
+  return {
+    name: matched.name,
+    team: matched.team,
+    email: matched.email,
+    allocatedAt: new Date().toISOString(),
+    rationale
+  };
 }
 
 export async function listQuotes(productType?: ProductType): Promise<QuoteSummary[]> {
@@ -58,7 +108,11 @@ export async function listQuotes(productType?: ProductType): Promise<QuoteSummar
 
 export async function updateQuote(quoteId: string, patch: Partial<Quote>): Promise<Quote> {
   const current = await getQuote(quoteId);
-  const updated = QuoteSchema.parse({ ...current, ...patch });
+  const candidate = QuoteSchema.parse({ ...current, ...patch });
+  const updated = QuoteSchema.parse({
+    ...candidate,
+    underwriter: candidate.status === "In Review" ? allocateUnderwriter(candidate) : candidate.underwriter
+  });
   await saveQuote(updated);
   return updated;
 }

@@ -7,7 +7,7 @@ import test from "node:test";
 import { classifySubmission, extractSubmissionFromText } from "../src/services/extractionService.js";
 import { parseDocumentInput } from "../src/services/documentParser.js";
 import { extractPropertySubmissionFromText } from "../src/services/propertyExtractionService.js";
-import { getQuote, listQuotes, saveQuote } from "../src/services/quoteRepository.js";
+import { getQuote, listQuotes, saveQuote, updateQuote } from "../src/services/quoteRepository.js";
 import { QuoteSchema, SubmissionSchema } from "../src/schemas/quote.schema.js";
 import { PropertyOwnersSubmissionEnvelopeSchema } from "../src/schemas/products/propertyOwners.schema.js";
 
@@ -371,6 +371,77 @@ test("lists quote summaries and filters them by product type", async () => {
       brokerName: "Aster Risk Partners",
       classOfBusiness: "Property Owners Package"
     }]);
+  } finally {
+    if (originalQuoteDataDir === undefined) {
+      delete process.env.QUOTE_DATA_DIR;
+    } else {
+      process.env.QUOTE_DATA_DIR = originalQuoteDataDir;
+    }
+    await fs.rm(tempRoot, { force: true, recursive: true });
+  }
+});
+
+test("allocates an underwriter when a quote is sent to review", async () => {
+  const originalQuoteDataDir = process.env.QUOTE_DATA_DIR;
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "submission-intake-underwriter-"));
+
+  try {
+    process.env.QUOTE_DATA_DIR = tempRoot;
+
+    const quote = QuoteSchema.parse({
+      quoteId: "Q-TEST-ALLOCATE",
+      status: "Draft",
+      createdAt: new Date("2026-05-04T00:00:00.000Z").toISOString(),
+      productType: "property_owners",
+      insured: { name: "Marwick Row Estates Ltd" },
+      broker: { name: "Aster Risk Partners" },
+      risk: {
+        classOfBusiness: "Property Owners Package",
+        coversRequested: ["Property Damage", "Property Owners Liability"]
+      },
+      dataQuality: {
+        missingFields: [],
+        warnings: [],
+        confidence: 0.94
+      },
+      productSubmission: PropertyOwnersSubmissionEnvelopeSchema.parse({
+        productType: "property_owners",
+        common: {
+          insured: { name: "Marwick Row Estates Ltd", trade: "Property Owners" },
+          broker: { name: "Aster Risk Partners" },
+          risk: {
+            classOfBusiness: "Property Owners Package",
+            coversRequested: ["Property Damage", "Property Owners Liability"]
+          }
+        },
+        productData: {
+          product: "Property Owners Package",
+          insured: { name: "Marwick Row Estates Ltd" },
+          broker: { name: "Aster Risk Partners" },
+          coverage: {},
+          locations: [{ name: "17-25 Marwick Row, London SE1" }],
+          lossHistory: [],
+          attachments: [],
+          underwriting: {}
+        },
+        dataQuality: {
+          missingFields: [],
+          warnings: [],
+          confidence: 0.94
+        }
+      })
+    });
+
+    await saveQuote(quote);
+
+    const reviewedQuote = await updateQuote(quote.quoteId, { status: "In Review" });
+    const summaries = await listQuotes("property_owners");
+
+    assert.equal(reviewedQuote.status, "In Review");
+    assert.equal(reviewedQuote.underwriter?.name, "Maya Desai");
+    assert.equal(reviewedQuote.underwriter?.team, "Property Owners");
+    assert.match(reviewedQuote.underwriter?.allocatedAt ?? "", /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(summaries[0].underwriterName, "Maya Desai");
   } finally {
     if (originalQuoteDataDir === undefined) {
       delete process.env.QUOTE_DATA_DIR;
