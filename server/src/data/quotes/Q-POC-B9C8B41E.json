@@ -1,8 +1,14 @@
 {
-  "quoteId": "Q-POC-B654B055",
-  "status": "Draft",
-  "createdAt": "2026-05-04T17:00:06.263Z",
-  "productType": "property_owners",
+  "quoteId": "Q-POC-B9C8B41E",
+  "status": "Quoted",
+  "createdAt": "2026-05-06T11:48:38.039Z",
+  "underwriter": {
+    "name": "Maya Desai",
+    "team": "Property Owners",
+    "email": "maya.desai@internal-underwriting.example",
+    "allocatedAt": "2026-05-06T11:55:21.147Z",
+    "rationale": "Allocated for underwriting review with data-quality referral points."
+  },
   "insured": {
     "name": "Marwick Row Estates Ltd",
     "trade": "Lessors of Nonresidential Buildings",
@@ -25,16 +31,16 @@
   },
   "dataQuality": {
     "missingFields": [
-      "Survey/financials document (partial only)",
-      "Expiring deductibles and retroactive dates (per broker, to be taken from attachments)",
-      "EWS1 resolution documentation"
+      "insured.address"
     ],
     "warnings": [
-      "Terrorism requested but quote target may exclude terrorism taxes — requires separate handling",
-      "Expired 2022 valuation schedule included as Appendix B; current values are in location schedule",
-      "Unresolved EWS1 wording in lender correspondence for one location (remediation invoice attached)",
-      "Mixed currencies and open reserves in loss run spreadsheet",
-      "Potential inconsistencies between completed application and cover note"
+      "Terrorism requested but quote target may exclude terrorism taxes — confirm pool wording applies",
+      "Mill Yard Works (1890 brick/timber joist) presents elevated fire risk with restaurant/deep-fat fryer tenant",
+      "Canal House cladding remediation completed 2024 — EWS1 documentation noted as unresolved in lender correspondence",
+      "Northgate Parade (1976) has ATM embedded — confirm cash-in-transit/crime exclusions",
+      "Expired 2022 valuation schedule included as Appendix B — current values taken from location schedule",
+      "Loss runs contain mixed currencies and open reserves — reconciliation required",
+      "Schedule of values may have duplicate or missing asset identifiers"
     ],
     "confidence": 0.82,
     "evidence": [
@@ -48,22 +54,35 @@
         "field": "coverage.buildingsAndLandlordContents",
         "label": "Buildings & Contents TIV",
         "evidence": "Buildings and landlord contents: GBP 96,450,000",
-        "confidence": 0.95
+        "confidence": 0.99
+      },
+      {
+        "field": "coverage.propertyOwnersLiability",
+        "label": "Property Owners Liability",
+        "evidence": "Property owners liability GBP 10,000,000",
+        "confidence": 0.99
       },
       {
         "field": "locations",
         "label": "Location Schedule",
-        "evidence": "5 location entries extracted from Risk and Exposure Schedule (4 named + 1 grouped)",
-        "confidence": 0.85
+        "evidence": "5 location entries extracted from risk and exposure schedule",
+        "confidence": 0.9
       },
       {
         "field": "lossHistory",
         "label": "Loss History",
-        "evidence": "3 losses from 2022-2024 extracted from loss history table",
+        "evidence": "3 losses extracted: EoW 2022, Fire 2023, Liability 2024",
         "confidence": 0.95
+      },
+      {
+        "field": "underwriting.escapeOfWaterDeductibleCap",
+        "label": "EoW Deductible Cap",
+        "evidence": "Insured will not accept a higher escape-of-water deductible than GBP 25,000",
+        "confidence": 0.99
       }
     ]
   },
+  "productType": "property_owners",
   "productSubmission": {
     "sourceFile": "SUB-001_property_owners_package___mixed_use_portfolio.pdf",
     "productType": "property_owners",
@@ -95,7 +114,7 @@
         "name": "Marwick Row Estates Ltd",
         "industryCode": "531120",
         "revenueOrTurnover": 8700000,
-        "revenueBasis": "GBP rental income",
+        "revenueBasis": "rental income",
         "employees": 24,
         "operationsOrLocations": "12 scheduled premises across London, Birmingham, Bristol"
       },
@@ -131,8 +150,8 @@
           "yearBuilt": 1890,
           "stories": "5",
           "tiv": 11200000,
-          "occupancy": "Grade II listed facade; restaurant tenant",
-          "notes": "Deep-fat fryers on site"
+          "occupancy": "Restaurant tenant",
+          "notes": "Grade II facade; deep-fat fryers"
         },
         {
           "name": "Canal House, Birmingham B1",
@@ -158,7 +177,7 @@
           "stories": "1-6",
           "tiv": 26300000,
           "occupancy": "Small offices and industrial units",
-          "notes": "Year built range 1960-2020"
+          "notes": "Built 1960-2020"
         }
       ],
       "lossHistory": [
@@ -220,16 +239,16 @@
     },
     "dataQuality": {
       "missingFields": [
-        "Survey/financials document (partial only)",
-        "Expiring deductibles and retroactive dates (per broker, to be taken from attachments)",
-        "EWS1 resolution documentation"
+        "insured.address"
       ],
       "warnings": [
-        "Terrorism requested but quote target may exclude terrorism taxes — requires separate handling",
-        "Expired 2022 valuation schedule included as Appendix B; current values are in location schedule",
-        "Unresolved EWS1 wording in lender correspondence for one location (remediation invoice attached)",
-        "Mixed currencies and open reserves in loss run spreadsheet",
-        "Potential inconsistencies between completed application and cover note"
+        "Terrorism requested but quote target may exclude terrorism taxes — confirm pool wording applies",
+        "Mill Yard Works (1890 brick/timber joist) presents elevated fire risk with restaurant/deep-fat fryer tenant",
+        "Canal House cladding remediation completed 2024 — EWS1 documentation noted as unresolved in lender correspondence",
+        "Northgate Parade (1976) has ATM embedded — confirm cash-in-transit/crime exclusions",
+        "Expired 2022 valuation schedule included as Appendix B — current values taken from location schedule",
+        "Loss runs contain mixed currencies and open reserves — reconciliation required",
+        "Schedule of values may have duplicate or missing asset identifiers"
       ],
       "confidence": 0.82,
       "evidence": [
@@ -243,19 +262,31 @@
           "field": "coverage.buildingsAndLandlordContents",
           "label": "Buildings & Contents TIV",
           "evidence": "Buildings and landlord contents: GBP 96,450,000",
-          "confidence": 0.95
+          "confidence": 0.99
+        },
+        {
+          "field": "coverage.propertyOwnersLiability",
+          "label": "Property Owners Liability",
+          "evidence": "Property owners liability GBP 10,000,000",
+          "confidence": 0.99
         },
         {
           "field": "locations",
           "label": "Location Schedule",
-          "evidence": "5 location entries extracted from Risk and Exposure Schedule (4 named + 1 grouped)",
-          "confidence": 0.85
+          "evidence": "5 location entries extracted from risk and exposure schedule",
+          "confidence": 0.9
         },
         {
           "field": "lossHistory",
           "label": "Loss History",
-          "evidence": "3 losses from 2022-2024 extracted from loss history table",
+          "evidence": "3 losses extracted: EoW 2022, Fire 2023, Liability 2024",
           "confidence": 0.95
+        },
+        {
+          "field": "underwriting.escapeOfWaterDeductibleCap",
+          "label": "EoW Deductible Cap",
+          "evidence": "Insured will not accept a higher escape-of-water deductible than GBP 25,000",
+          "confidence": 0.99
         }
       ]
     }

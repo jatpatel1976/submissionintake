@@ -4,6 +4,13 @@ import { App as McpApp } from "@modelcontextprotocol/ext-apps";
 import { AlertTriangle, CheckCircle2, ChevronDown, Eye, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
 import "./styles.css";
 
+type DataQuality = {
+  missingFields: string[];
+  warnings: string[];
+  confidence: number;
+  evidence?: Array<{ field: string; label?: string; evidence?: string; confidence: number }>;
+};
+
 type Quote = {
   quoteId: string;
   status: "Draft" | "In Review" | "Quoted" | "Declined";
@@ -14,15 +21,12 @@ type Quote = {
   broker?: { name?: string; contact?: string };
   risk: { classOfBusiness?: string; inceptionDate?: string; coversRequested: string[] };
   productSubmission?: {
+    sourceFile?: string;
     productType: "property_owners";
     productData: PropertyOwnersProductData;
+    dataQuality?: DataQuality;
   };
-  dataQuality: {
-    missingFields: string[];
-    warnings: string[];
-    confidence: number;
-    evidence?: Array<{ field: string; label?: string; evidence?: string; confidence: number }>;
-  };
+  dataQuality: DataQuality;
 };
 
 type QuoteSummary = {
@@ -38,6 +42,23 @@ type QuoteSummary = {
 
 type PropertyOwnersProductData = {
     product: "Property Owners Package";
+    insured?: {
+      name?: string;
+      industryCode?: string;
+      revenueOrTurnover?: number;
+      revenueBasis?: string;
+      employees?: number;
+      operationsOrLocations?: string;
+    };
+    broker?: {
+      name?: string;
+      contact?: string;
+      email?: string;
+      phone?: string;
+      submissionReference?: string;
+      proposedEffectiveDate?: string;
+      marketDeadline?: string;
+    };
     coverage: {
       buildingsAndLandlordContents?: number;
       lossOfRentMonths?: number;
@@ -61,17 +82,30 @@ type PropertyOwnersProductData = {
       reserved?: number;
       description?: string;
     }>;
+    attachments?: Array<{
+      name: string;
+      status?: string;
+      potentialIssue?: string;
+    }>;
+    underwriting?: {
+      requestedCommonRenewalDate?: string;
+      escapeOfWaterDeductibleCap?: number;
+      accountMarketingBasis?: string;
+      brokerInstructions?: string;
+    };
 };
 
 type ToolResult = {
   structuredContent?: unknown;
 };
 
+type ViewMode = "record" | "data_points";
+
 const API_BASE = "http://localhost:8787";
 const isEmbeddedMcpApp = window.parent !== window;
 
 function formatCurrency(value?: number) {
-  if (!value) return "Missing";
+  if (value === undefined) return "Missing";
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 }).format(value);
 }
 
@@ -85,10 +119,13 @@ function getPropertyData(quote: Quote): PropertyOwnersProductData | null {
   return null;
 }
 
-function quoteFromToolResult(result: ToolResult): Quote | null {
-  const structuredContent = result.structuredContent as Quote | undefined;
+function quoteResultFromToolResult(result: ToolResult): { quote: Quote; view?: ViewMode } | null {
+  const structuredContent = result.structuredContent as Quote | { quote?: Quote; view?: ViewMode } | undefined;
   if (!structuredContent || typeof structuredContent !== "object") return null;
-  if ("quoteId" in structuredContent) return structuredContent;
+  if ("quoteId" in structuredContent) return { quote: structuredContent };
+  if ("quote" in structuredContent && structuredContent.quote?.quoteId) {
+    return { quote: structuredContent.quote, view: structuredContent.view };
+  }
   return null;
 }
 
@@ -101,6 +138,7 @@ function quoteListFromToolResult(result: ToolResult): QuoteSummary[] | null {
 function useQuote() {
   const [quote, setQuote] = React.useState<Quote | null>(null);
   const [quoteList, setQuoteList] = React.useState<QuoteSummary[] | null>(null);
+  const [view, setView] = React.useState<ViewMode>("record");
   const [error, setError] = React.useState<string | null>(null);
   const [isConnecting, setIsConnecting] = React.useState(isEmbeddedMcpApp);
   const mcpAppRef = React.useRef<McpApp | null>(null);
@@ -119,10 +157,11 @@ function useQuote() {
           return;
         }
 
-        const nextQuote = quoteFromToolResult(result);
-        if (nextQuote) {
-          setQuote(nextQuote);
+        const nextQuoteResult = quoteResultFromToolResult(result);
+        if (nextQuoteResult) {
+          setQuote(nextQuoteResult.quote);
           setQuoteList(null);
+          setView(nextQuoteResult.view ?? "record");
           setError(null);
         }
       };
@@ -140,7 +179,10 @@ function useQuote() {
       };
     }
 
-    const quoteId = new URLSearchParams(window.location.search).get("quoteId");
+    const params = new URLSearchParams(window.location.search);
+    const quoteId = params.get("quoteId");
+    const requestedView = params.get("view") === "data_points" ? "data_points" : "record";
+    setView(requestedView);
     if (!quoteId) {
       fetch(`${API_BASE}/api/quotes`)
         .then((res) => {
@@ -160,16 +202,17 @@ function useQuote() {
       .catch((err) => setError(err.message));
   }, []);
 
-  async function loadQuote(quoteId: string) {
+  async function loadQuote(quoteId: string, preferredView: ViewMode = "record") {
     if (mcpAppRef.current) {
       const result = await mcpAppRef.current.callServerTool({
         name: "get_quote",
-        arguments: { quoteId }
+        arguments: { quoteId, view: preferredView }
       });
-      const nextQuote = quoteFromToolResult(result);
-      if (nextQuote) {
-        setQuote(nextQuote);
+      const nextQuoteResult = quoteResultFromToolResult(result);
+      if (nextQuoteResult) {
+        setQuote(nextQuoteResult.quote);
         setQuoteList(null);
+        setView(nextQuoteResult.view ?? preferredView);
       }
       return;
     }
@@ -178,6 +221,7 @@ function useQuote() {
     if (!res.ok) throw new Error("Quote not found");
     setQuote(await res.json());
     setQuoteList(null);
+    setView(preferredView);
   }
 
   async function loadQuoteList(productType?: Quote["productType"]) {
@@ -210,8 +254,8 @@ function useQuote() {
         name: "update_quote_status",
         arguments: { quoteId: quote.quoteId, status }
       });
-      const nextQuote = quoteFromToolResult(result);
-      if (nextQuote) setQuote(nextQuote);
+      const nextQuoteResult = quoteResultFromToolResult(result);
+      if (nextQuoteResult) setQuote(nextQuoteResult.quote);
       return;
     }
 
@@ -231,8 +275,8 @@ function useQuote() {
         name: "update_quote",
         arguments: { quoteId: quote.quoteId, ...patch }
       });
-      const nextQuote = quoteFromToolResult(result);
-      if (nextQuote) setQuote(nextQuote);
+      const nextQuoteResult = quoteResultFromToolResult(result);
+      if (nextQuoteResult) setQuote(nextQuoteResult.quote);
       return;
     }
 
@@ -244,7 +288,7 @@ function useQuote() {
     setQuote(await res.json());
   }
 
-  return { quote, quoteList, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote };
+  return { quote, quoteList, view, setView, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote };
 }
 
 type InsuredEditorProps = {
@@ -450,6 +494,240 @@ function ProductPanels({ quote }: { quote: Quote }) {
   return null;
 }
 
+function formatPercent(value?: number) {
+  if (value === undefined) return "";
+  return `${Math.round(value * 100)}%`;
+}
+
+function formatBoolean(value?: boolean, trueText = "Included", falseText = "Not requested") {
+  if (value === undefined) return "Missing";
+  return value ? trueText : falseText;
+}
+
+function getEvidence(dataQuality: DataQuality, field: string) {
+  return dataQuality.evidence?.find((item) => item.field === field);
+}
+
+type DataPointRowProps = {
+  label: string;
+  value?: React.ReactNode;
+  evidence?: { evidence?: string; confidence: number };
+  missing?: boolean;
+};
+
+function DataPointRow({ label, value, evidence, missing }: DataPointRowProps) {
+  const isMissing = missing || value === undefined || value === null || value === "";
+  return (
+    <div className="data-point-row">
+      <dt>{label}</dt>
+      <dd>
+        <strong className={isMissing ? "missing-value" : ""}>{isMissing ? "Not provided" : value}</strong>
+        {evidence?.evidence && <small>{evidence.evidence}</small>}
+      </dd>
+      <span className={`confidence-badge ${isMissing ? "is-missing" : ""}`}>
+        {isMissing ? "missing" : evidence ? formatPercent(evidence.confidence) : "-"}
+      </span>
+    </div>
+  );
+}
+
+function DataPointSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="data-point-section">
+      <h2>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function DataPointsView({ quote, onViewChange }: { quote: Quote; onViewChange: (view: ViewMode) => void }) {
+  const property = getPropertyData(quote);
+  const dataQuality = quote.productSubmission?.dataQuality ?? quote.dataQuality;
+  const sourceFile = quote.productSubmission?.sourceFile;
+  const confidence = formatPercent(dataQuality.confidence);
+
+  return (
+    <main className="shell data-points-shell">
+      <section className="hero data-points-hero">
+        <div>
+          <p className="eyebrow">Extracted Data Points</p>
+          <h1>{quote.quoteId}</h1>
+          <p className="muted">{sourceFile ?? quote.insured.name ?? "Quote record"}</p>
+        </div>
+        <div className="view-actions" role="group" aria-label="Quote view">
+          <button type="button" onClick={() => onViewChange("record")}>Record</button>
+          <button className="active" type="button" onClick={() => onViewChange("data_points")}>Data Points</button>
+        </div>
+      </section>
+
+      <section className="confidence-card" aria-label="Overall extraction confidence">
+        <div>
+          <span>Overall extraction confidence</span>
+          <div className="confidence-track"><span style={{ width: confidence }}></span></div>
+          <small>{confidence} - {quote.insured.name ?? sourceFile ?? quote.quoteId}</small>
+        </div>
+        <strong>{confidence}<small>confidence</small></strong>
+      </section>
+
+      <DataPointSection title="Insured">
+        <dl className="data-point-list">
+          <DataPointRow label="Name" value={property?.insured?.name ?? quote.insured.name} evidence={getEvidence(dataQuality, "insured.name")} />
+          <DataPointRow label="Trade / industry" value={quote.insured.trade} />
+          <DataPointRow label="Industry code" value={property?.insured?.industryCode} />
+          <DataPointRow
+            label="Revenue / turnover"
+            value={formatCurrency(property?.insured?.revenueOrTurnover ?? quote.insured.turnover)}
+            evidence={getEvidence(dataQuality, "insured.turnover")}
+          />
+          <DataPointRow label="Employees" value={property?.insured?.employees} />
+          <DataPointRow label="Operations / locations" value={property?.insured?.operationsOrLocations} />
+          <DataPointRow label="Address" value={quote.insured.address} missing={!quote.insured.address} />
+        </dl>
+      </DataPointSection>
+
+      <DataPointSection title="Broker">
+        <dl className="data-point-list">
+          <DataPointRow label="Firm name" value={property?.broker?.name ?? quote.broker?.name} evidence={getEvidence(dataQuality, "broker.name")} />
+          <DataPointRow label="Contact" value={property?.broker?.contact ?? quote.broker?.contact} />
+          <DataPointRow label="Email" value={property?.broker?.email} />
+          <DataPointRow label="Phone" value={property?.broker?.phone} />
+          <DataPointRow label="Submission reference" value={property?.broker?.submissionReference} />
+          <DataPointRow label="Proposed effective date" value={property?.broker?.proposedEffectiveDate ?? quote.risk.inceptionDate} />
+          <DataPointRow label="Market deadline" value={property?.broker?.marketDeadline} />
+        </dl>
+      </DataPointSection>
+
+      {property ? (
+        <>
+          <DataPointSection title="Coverage Requested">
+            <dl className="data-point-list">
+              <DataPointRow label="Buildings & landlord contents" value={formatCurrency(property.coverage.buildingsAndLandlordContents)} evidence={getEvidence(dataQuality, "coverage.buildingsAndLandlordContents")} />
+              <DataPointRow label="Loss of rent" value={property.coverage.lossOfRentMonths ? `${property.coverage.lossOfRentMonths} months` : undefined} />
+              <DataPointRow label="Property owners liability" value={formatCurrency(property.coverage.propertyOwnersLiability)} evidence={getEvidence(dataQuality, "coverage.propertyOwnersLiability")} />
+              <DataPointRow label="Terrorism" value={formatBoolean(property.coverage.terrorismIncluded)} />
+              <DataPointRow label="Engineering inspection & breakdown" value={formatBoolean(property.coverage.engineeringInspectionAndBreakdownRequested, "Requested", "Not requested")} />
+            </dl>
+          </DataPointSection>
+
+          <DataPointSection title={`Location Schedule (${property.locations.length} entries)`}>
+            <div className="table-wrap data-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Location</th>
+                    <th>Construction</th>
+                    <th>Built</th>
+                    <th>Stories</th>
+                    <th>TIV</th>
+                    <th>Occupancy / notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {property.locations.map((location) => (
+                    <tr key={location.name}>
+                      <td>{location.name}</td>
+                      <td>{location.construction ?? "Missing"}</td>
+                      <td>{location.yearBuilt ?? "Missing"}</td>
+                      <td>{location.stories ?? "Missing"}</td>
+                      <td>{formatCurrency(location.tiv)}</td>
+                      <td>{[location.occupancy, location.notes].filter(Boolean).join("; ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {getEvidence(dataQuality, "locations")?.evidence && <p className="table-note">{getEvidence(dataQuality, "locations")?.evidence}</p>}
+          </DataPointSection>
+
+          <DataPointSection title={`Loss History (${property.lossHistory.length} entries)`}>
+            <div className="table-wrap data-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Paid</th>
+                    <th>Reserved</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {property.lossHistory.map((loss, index) => (
+                    <tr key={`${loss.date}-${index}`}>
+                      <td>{loss.date ?? "Missing"}</td>
+                      <td>{loss.type ?? "Missing"}</td>
+                      <td>{formatCurrency(loss.paid)}</td>
+                      <td>{formatCurrency(loss.reserved)}</td>
+                      <td>{loss.description ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {getEvidence(dataQuality, "lossHistory")?.evidence && <p className="table-note">{getEvidence(dataQuality, "lossHistory")?.evidence}</p>}
+          </DataPointSection>
+
+          <DataPointSection title="Underwriting Data">
+            <dl className="data-point-list">
+              <DataPointRow label="Requested common renewal" value={property.underwriting?.requestedCommonRenewalDate} />
+              <DataPointRow label="EoW deductible cap" value={formatCurrency(property.underwriting?.escapeOfWaterDeductibleCap)} />
+              <DataPointRow label="Marketing basis" value={property.underwriting?.accountMarketingBasis} />
+              <DataPointRow label="Broker instructions" value={property.underwriting?.brokerInstructions} />
+            </dl>
+          </DataPointSection>
+
+          {!!property.attachments?.length && (
+            <DataPointSection title={`Attachments (${property.attachments.length} listed)`}>
+              <div className="table-wrap data-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>File</th>
+                      <th>Status</th>
+                      <th>Potential issue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {property.attachments.map((attachment) => (
+                      <tr key={attachment.name}>
+                        <td>{attachment.name}</td>
+                        <td>{attachment.status ?? "Missing"}</td>
+                        <td>{attachment.potentialIssue ?? ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </DataPointSection>
+          )}
+        </>
+      ) : (
+        <DataPointSection title="Coverage Requested">
+          <div className="pill-list">
+            {quote.risk.coversRequested.map((cover) => <span className="pill" key={cover}>{cover}</span>)}
+          </div>
+        </DataPointSection>
+      )}
+
+      <DataPointSection title={`Missing Fields (${dataQuality.missingFields.length})`}>
+        {dataQuality.missingFields.length ? (
+          <ul className="issue-list missing-list">{dataQuality.missingFields.map((field) => <li key={field}>{field}</li>)}</ul>
+        ) : (
+          <p className="muted">No missing fields recorded.</p>
+        )}
+      </DataPointSection>
+
+      <DataPointSection title={`Warnings (${dataQuality.warnings.length})`}>
+        {dataQuality.warnings.length ? (
+          <ul className="issue-list warning-list">{dataQuality.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+        ) : (
+          <p className="muted">No warnings recorded.</p>
+        )}
+      </DataPointSection>
+    </main>
+  );
+}
+
 type QuoteBrowserProps = {
   quotes: QuoteSummary[];
   onSelect: (quoteId: string) => Promise<void>;
@@ -551,12 +829,13 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
 }
 
 function App() {
-  const { quote, quoteList, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote } = useQuote();
+  const { quote, quoteList, view, setView, error, isConnecting, loadQuote, loadQuoteList, updateStatus, updateQuote } = useQuote();
   const [reviewWorkflowState, setReviewWorkflowState] = React.useState<"idle" | "processing" | "complete">("idle");
 
   if (error) return <main className="shell error"><h1>Unable to load quote</h1><p>{error}</p></main>;
   if (quoteList) return <QuoteBrowser quotes={quoteList} onSelect={loadQuote} onFilter={loadQuoteList} />;
   if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
+  if (view === "data_points") return <DataPointsView quote={quote} onViewChange={setView} />;
 
   const confidence = Math.round(quote.dataQuality.confidence * 100);
   const isReviewAcknowledged = reviewWorkflowState === "complete" || quote.status === "In Review";
@@ -576,7 +855,13 @@ function App() {
           <h1>Quote {quote.quoteId}</h1>
           <p className="muted">Created {new Date(quote.createdAt).toLocaleString()}</p>
         </div>
-        <span className={`status ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span>
+        <div className="hero-actions">
+          <div className="view-actions" role="group" aria-label="Quote view">
+            <button className="active" type="button" onClick={() => setView("record")}>Record</button>
+            <button type="button" onClick={() => setView("data_points")}>Data Points</button>
+          </div>
+          <span className={`status ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span>
+        </div>
       </section>
 
       <section className="quote-summary-card" aria-label="Quote summary">

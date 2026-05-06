@@ -1,7 +1,7 @@
 {
-  "quoteId": "Q-POC-E0457E3C",
+  "quoteId": "Q-POC-01B93F36",
   "status": "Draft",
-  "createdAt": "2026-05-06T10:53:18.645Z",
+  "createdAt": "2026-05-06T15:44:33.988Z",
   "insured": {
     "name": "Marwick Row Estates Ltd",
     "trade": "Lessors of Nonresidential Buildings",
@@ -27,58 +27,51 @@
       "insured.address"
     ],
     "warnings": [
-      "Terrorism requested via separate pool wording — confirm tax/levy treatment at quote stage",
-      "Mill Yard Works (1890, brick/timber joist, Grade II): elevated fire and heritage risk; deep-fat fryer tenant adds cooking risk",
-      "Canal House: cladding remediation completed 2024 — EWS1 status unresolved per lender correspondence (Appendix note)",
-      "17-25 Marwick Row: 18% vacancy above normal threshold — confirm vacant unit management",
-      "Loss runs in xlsx may contain mixed currencies and open reserves — verify before rating",
-      "Valuation schedule: broker included an expired 2022 schedule (Appendix B); current TIVs taken from cover note location schedule",
-      "Schedule of values xlsx flagged for duplicate or missing asset identifiers",
-      "Survey/financials attachment is partial with possible redactions or expired dates"
+      "Terrorism requested but quote target may exclude terrorism taxes — confirm pool wording applies",
+      "Mill Yard Works (1890 brick/timber joist) presents elevated fire risk with restaurant/deep-fat fryer tenant",
+      "Canal House cladding remediation completed 2024 — EWS1 documentation noted as unresolved in lender correspondence",
+      "Northgate Parade (1976) has ATM embedded — confirm cash-in-transit/crime exclusions",
+      "Expired 2022 valuation schedule included as Appendix B — current values taken from location schedule",
+      "Loss runs contain mixed currencies and open reserves — reconciliation required",
+      "Schedule of values may have duplicate or missing asset identifiers"
     ],
     "confidence": 0.82,
     "evidence": [
       {
         "field": "insured.name",
-        "label": "Named insured",
+        "label": "Named Insured",
         "evidence": "Named insured: Marwick Row Estates Ltd",
         "confidence": 0.99
       },
       {
-        "field": "insured.revenueOrTurnover",
-        "label": "Revenue / turnover",
-        "evidence": "Revenue / turnover: GBP 8.7m rental income",
-        "confidence": 0.95
-      },
-      {
         "field": "coverage.buildingsAndLandlordContents",
-        "label": "Buildings and landlord contents",
+        "label": "Buildings & Contents TIV",
         "evidence": "Buildings and landlord contents: GBP 96,450,000",
         "confidence": 0.99
       },
       {
         "field": "coverage.propertyOwnersLiability",
-        "label": "Property owners liability",
-        "evidence": "Property owners liability: GBP 10,000,000",
+        "label": "Property Owners Liability",
+        "evidence": "Property owners liability GBP 10,000,000",
         "confidence": 0.99
       },
       {
         "field": "locations",
-        "label": "Location schedule",
-        "evidence": "5 location entries extracted from Section 4",
+        "label": "Location Schedule",
+        "evidence": "5 location entries extracted from risk and exposure schedule",
         "confidence": 0.9
       },
       {
         "field": "lossHistory",
-        "label": "Loss history",
-        "evidence": "3 loss entries extracted from Section 5",
+        "label": "Loss History",
+        "evidence": "3 losses extracted: EoW 2022, Fire 2023, Liability 2024",
         "confidence": 0.95
       },
       {
         "field": "underwriting.escapeOfWaterDeductibleCap",
-        "label": "EoW deductible cap",
-        "evidence": "Insured will not accept a higher escape-of-water deductible than GBP 25,000 for residential blocks",
-        "confidence": 0.95
+        "label": "EoW Deductible Cap",
+        "evidence": "Insured will not accept a higher escape-of-water deductible than GBP 25,000",
+        "confidence": 0.99
       }
     ]
   },
@@ -114,7 +107,7 @@
         "name": "Marwick Row Estates Ltd",
         "industryCode": "531120",
         "revenueOrTurnover": 8700000,
-        "revenueBasis": "GBP rental income",
+        "revenueBasis": "rental income",
         "employees": 24,
         "operationsOrLocations": "12 scheduled premises across London, Birmingham, Bristol"
       },
@@ -151,7 +144,7 @@
           "stories": "5",
           "tiv": 11200000,
           "occupancy": "Restaurant tenant",
-          "notes": "Grade II listed facade; deep-fat fryers"
+          "notes": "Grade II facade; deep-fat fryers"
         },
         {
           "name": "Canal House, Birmingham B1",
@@ -242,58 +235,51 @@
         "insured.address"
       ],
       "warnings": [
-        "Terrorism requested via separate pool wording — confirm tax/levy treatment at quote stage",
-        "Mill Yard Works (1890, brick/timber joist, Grade II): elevated fire and heritage risk; deep-fat fryer tenant adds cooking risk",
-        "Canal House: cladding remediation completed 2024 — EWS1 status unresolved per lender correspondence (Appendix note)",
-        "17-25 Marwick Row: 18% vacancy above normal threshold — confirm vacant unit management",
-        "Loss runs in xlsx may contain mixed currencies and open reserves — verify before rating",
-        "Valuation schedule: broker included an expired 2022 schedule (Appendix B); current TIVs taken from cover note location schedule",
-        "Schedule of values xlsx flagged for duplicate or missing asset identifiers",
-        "Survey/financials attachment is partial with possible redactions or expired dates"
+        "Terrorism requested but quote target may exclude terrorism taxes — confirm pool wording applies",
+        "Mill Yard Works (1890 brick/timber joist) presents elevated fire risk with restaurant/deep-fat fryer tenant",
+        "Canal House cladding remediation completed 2024 — EWS1 documentation noted as unresolved in lender correspondence",
+        "Northgate Parade (1976) has ATM embedded — confirm cash-in-transit/crime exclusions",
+        "Expired 2022 valuation schedule included as Appendix B — current values taken from location schedule",
+        "Loss runs contain mixed currencies and open reserves — reconciliation required",
+        "Schedule of values may have duplicate or missing asset identifiers"
       ],
       "confidence": 0.82,
       "evidence": [
         {
           "field": "insured.name",
-          "label": "Named insured",
+          "label": "Named Insured",
           "evidence": "Named insured: Marwick Row Estates Ltd",
           "confidence": 0.99
         },
         {
-          "field": "insured.revenueOrTurnover",
-          "label": "Revenue / turnover",
-          "evidence": "Revenue / turnover: GBP 8.7m rental income",
-          "confidence": 0.95
-        },
-        {
           "field": "coverage.buildingsAndLandlordContents",
-          "label": "Buildings and landlord contents",
+          "label": "Buildings & Contents TIV",
           "evidence": "Buildings and landlord contents: GBP 96,450,000",
           "confidence": 0.99
         },
         {
           "field": "coverage.propertyOwnersLiability",
-          "label": "Property owners liability",
-          "evidence": "Property owners liability: GBP 10,000,000",
+          "label": "Property Owners Liability",
+          "evidence": "Property owners liability GBP 10,000,000",
           "confidence": 0.99
         },
         {
           "field": "locations",
-          "label": "Location schedule",
-          "evidence": "5 location entries extracted from Section 4",
+          "label": "Location Schedule",
+          "evidence": "5 location entries extracted from risk and exposure schedule",
           "confidence": 0.9
         },
         {
           "field": "lossHistory",
-          "label": "Loss history",
-          "evidence": "3 loss entries extracted from Section 5",
+          "label": "Loss History",
+          "evidence": "3 losses extracted: EoW 2022, Fire 2023, Liability 2024",
           "confidence": 0.95
         },
         {
           "field": "underwriting.escapeOfWaterDeductibleCap",
-          "label": "EoW deductible cap",
-          "evidence": "Insured will not accept a higher escape-of-water deductible than GBP 25,000 for residential blocks",
-          "confidence": 0.95
+          "label": "EoW Deductible Cap",
+          "evidence": "Insured will not accept a higher escape-of-water deductible than GBP 25,000",
+          "confidence": 0.99
         }
       ]
     }

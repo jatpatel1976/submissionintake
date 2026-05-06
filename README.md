@@ -11,6 +11,8 @@ It includes:
 - A Markdown submission intake playbook that drives classification indicators, extraction labels, defaults and data quality checks
 - A sample broker submission text file you can upload or attach in Claude Desktop
 
+For a visual map of the project and how it maps to MCP Resources, Tools and Prompts, see [docs/mcp-architecture.md](docs/mcp-architecture.md).
+
 ## Prerequisites
 
 - macOS
@@ -69,6 +71,28 @@ Quote API at http://localhost:8787
 
 Press `Ctrl+C` to stop it before letting Claude Desktop run it.
 
+## Viewing Performance Logs
+
+The server writes timing logs to stderr and mirrors them to:
+
+```text
+logs/submission-intake.log
+```
+
+To watch logs in a bash terminal:
+
+```bash
+tail -f logs/submission-intake.log
+```
+
+Claude Desktop starts the MCP server as its own child process from `claude_desktop_config.json`. If you separately run `npm run dev:server` in a terminal, Claude Desktop will not send tool calls to that terminal process. Tailing the log file is the most reliable way to see the MCP timing logs regardless of which process launched the server.
+
+You can override the log path with:
+
+```bash
+SUBMISSION_INTAKE_LOG_FILE=/tmp/submission-intake.log npm run dev:server
+```
+
 ## Submission Intake Tests
 
 Run the submission ingestion and output tests with:
@@ -98,9 +122,7 @@ Add this configuration, replacing the repo path with your actual repo path:
   "mcpServers": {
     "submission-intake": {
       "command": "node",
-      "args": [
-        "/ABSOLUTE/PATH/TO/submission-intake-poc/server/dist/index.js"
-      ],
+      "args": ["/ABSOLUTE/PATH/TO/submission-intake-poc/server/dist/index.js"],
       "env": {
         "API_PORT": "8787"
       }
@@ -194,6 +216,14 @@ Use get_quote to list property_owners quotes and show the quote UI.
 ```
 
 Calling `get_quote` without a `quoteId` returns a quote list, optionally filtered by `productType`. Selecting a row in the embedded UI retrieves the full quote details.
+
+To open the deterministic extracted data-points view for a quote, ask Claude:
+
+```text
+Use get_quote with quoteId Q-POC-4888587E and view data_points.
+```
+
+The same embedded quote UI will render a stable extraction screen with confidence, evidence, missing fields, warnings and product-specific schedules where available.
 
 The MCP tools expect Claude to pass the uploaded document text from the prompt into the tool call. They no longer require or accept an absolute local file path for submission processing.
 

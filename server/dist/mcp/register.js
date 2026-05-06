@@ -10,6 +10,7 @@ import { PropertyOwnersSubmissionEnvelopeSchema } from "../schemas/products/prop
 import { QuoteSchema, SubmissionSchema } from "../schemas/quote.schema.js";
 import { parseDocumentInput } from "../services/documentParser.js";
 import { classifySubmission, extractSubmissionFromText, getSubmissionIntakeInstructions } from "../services/extractionService.js";
+import { logConsole } from "../services/logger.js";
 import { extractPropertySubmissionFromText } from "../services/propertyExtractionService.js";
 import { getQuote, listQuotes, saveQuote, updateQuote } from "../services/quoteRepository.js";
 const quoteRecordResourceUri = "ui://quote-record/index.html";
@@ -21,6 +22,46 @@ const DocumentInputSchema = {
     mimeType: z.string().optional().describe("Document MIME type, for example application/pdf"),
     fileName: z.string().optional().describe("Original uploaded file name, when available")
 };
+function nowMs() {
+    return Number(process.hrtime.bigint() / 1000000n);
+}
+function logMcp(message, context = {}) {
+    logConsole("mcp", message, context);
+}
+async function timePhase(tool, phase, work) {
+    const start = nowMs();
+    try {
+        return await work();
+    }
+    finally {
+        logMcp("phase", { tool, phase, durationMs: nowMs() - start });
+    }
+}
+async function timeTool(tool, context, work) {
+    const start = nowMs();
+    logMcp("start", { tool, ...context });
+    try {
+        const result = await work();
+        logMcp("complete", { tool, durationMs: nowMs() - start });
+        return result;
+    }
+    catch (error) {
+        logMcp("error", {
+            tool,
+            durationMs: nowMs() - start,
+            message: error instanceof Error ? error.message : "Unknown error"
+        });
+        throw error;
+    }
+}
+function documentInputContext(input) {
+    return {
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        textChars: input.documentText?.length,
+        base64Chars: input.documentBase64?.length
+    };
+}
 function markdownCell(value) {
     if (value === undefined || value === null || value === "")
         return "";
@@ -190,6 +231,10 @@ function registerPrompts(server) {
                         "To retrieve one quote directly, call get_quote with:",
                         "- quoteId: the quote id",
                         "",
+                        "To show the deterministic extracted data-points view for one quote, call get_quote with:",
+                        "- quoteId: the quote id",
+                        "- view: data_points",
+                        "",
                         "When listing quotes, render the embedded quote record UI so I can select a quote and view the details."
                     ].join("\n")
                 }
@@ -199,29 +244,57 @@ function registerPrompts(server) {
 }
 function registerTools(server) {
     server.tool("classify_document", "Classify an insurance document and recommend whether it should be processed as a submission.", DocumentInputSchema, async (input) => {
-        const parsedDocument = await parseDocumentInput(input);
-        const classification = await classifySubmission(parsedDocument.text);
-        const sourceFile = parsedDocument.sourceFile;
-        return {
-            content: [{ type: "text", text: JSON.stringify({ sourceFile, parser: parsedDocument.parser, ...classification }, null, 2) }],
-            structuredContent: { sourceFile, parser: parsedDocument.parser, ...classification }
-        };
+        return timeTool("classify_document", documentInputContext(input), async () => {
+            const parsedDocument = await timePhase("classify_document", "parse_document", () => parseDocumentInput(input));
+            const classification = await timePhase("classify_document", "classify_submission", () => classifySubmission(parsedDocument.text));
+            const sourceFile = parsedDocument.sourceFile;
+            logMcp("document", {
+                tool: "classify_document",
+                sourceFile,
+                parser: parsedDocument.parser,
+                textChars: parsedDocument.text.length
+            });
+            return {
+                content: [{ type: "text", text: JSON.stringify({ sourceFile, parser: parsedDocument.parser, ...classification }, null, 2) }],
+                structuredContent: { sourceFile, parser: parsedDocument.parser, ...classification }
+            };
+        });
     });
     server.tool("extract_submission", "Extract structured commercial insurance submission data from a document.", DocumentInputSchema, async (input) => {
-        const parsedDocument = await parseDocumentInput(input);
-        const submission = SubmissionSchema.parse(await extractSubmissionFromText(parsedDocument.sourceFile, parsedDocument.text));
-        return {
-            content: [{ type: "text", text: JSON.stringify(submission, null, 2) }],
-            structuredContent: submission
-        };
+        return timeTool("extract_submission", documentInputContext(input), async () => {
+            const parsedDocument = await timePhase("extract_submission", "parse_document", () => parseDocumentInput(input));
+            const extracted = await timePhase("extract_submission", "extract_submission", () => extractSubmissionFromText(parsedDocument.sourceFile, parsedDocument.text));
+            const submission = await timePhase("extract_submission", "validate_schema", async () => SubmissionSchema.parse(extracted));
+            logMcp("document", {
+                tool: "extract_submission",
+                sourceFile: parsedDocument.sourceFile,
+                parser: parsedDocument.parser,
+                textChars: parsedDocument.text.length
+            });
+            return {
+                content: [{ type: "text", text: JSON.stringify(submission, null, 2) }],
+                structuredContent: submission
+            };
+        });
     });
     server.tool("extract_property_submission", "Extract property owners package datapoints from a broker submission and validate them against the property schema.", DocumentInputSchema, async (input) => {
-        const parsedDocument = await parseDocumentInput(input);
-        const propertySubmission = PropertyOwnersSubmissionEnvelopeSchema.parse(await extractPropertySubmissionFromText(parsedDocument.sourceFile, parsedDocument.text));
-        return {
-            content: [{ type: "text", text: propertySubmissionMarkdown(propertySubmission) }],
-            structuredContent: propertySubmission
-        };
+        return timeTool("extract_property_submission", documentInputContext(input), async () => {
+            const parsedDocument = await timePhase("extract_property_submission", "parse_document", () => parseDocumentInput(input));
+            const extracted = await timePhase("extract_property_submission", "extract_property_submission", () => (extractPropertySubmissionFromText(parsedDocument.sourceFile, parsedDocument.text)));
+            const propertySubmission = await timePhase("extract_property_submission", "validate_schema", async () => (PropertyOwnersSubmissionEnvelopeSchema.parse(extracted)));
+            logMcp("document", {
+                tool: "extract_property_submission",
+                sourceFile: parsedDocument.sourceFile,
+                parser: parsedDocument.parser,
+                textChars: parsedDocument.text.length,
+                locations: propertySubmission.productData.locations.length,
+                losses: propertySubmission.productData.lossHistory.length
+            });
+            return {
+                content: [{ type: "text", text: propertySubmissionMarkdown(propertySubmission) }],
+                structuredContent: propertySubmission
+            };
+        });
     });
     registerAppTool(server, "create_quote", {
         title: "Create Quote",
@@ -234,59 +307,73 @@ function registerTools(server) {
             ui: { resourceUri: quoteRecordResourceUri }
         }
     }, async ({ submission, productSubmission }) => {
-        if (!submission && !productSubmission) {
-            throw new Error("Provide either submission or productSubmission.");
-        }
-        const quote = productSubmission
-            ? quoteFromProductSubmission(productSubmission)
-            : QuoteSchema.parse({
-                quoteId: `Q-POC-${randomUUID().slice(0, 8).toUpperCase()}`,
-                status: "Draft",
-                createdAt: new Date().toISOString(),
-                productType: "generic_commercial",
-                insured: submission?.insured,
-                broker: submission?.broker,
-                risk: submission?.risk,
-                dataQuality: submission?.dataQuality
-            });
-        await saveQuote(quote);
-        return {
-            content: [
-                { type: "text", text: `Quote ${quote.quoteId} created. The quote record UI is rendered inline in Claude.` }
-            ],
-            structuredContent: quote
-        };
+        return timeTool("create_quote", {
+            hasSubmission: Boolean(submission),
+            hasProductSubmission: Boolean(productSubmission),
+            productType: productSubmission?.productType
+        }, async () => {
+            if (!submission && !productSubmission) {
+                throw new Error("Provide either submission or productSubmission.");
+            }
+            const quote = await timePhase("create_quote", "build_quote", async () => (productSubmission
+                ? quoteFromProductSubmission(productSubmission)
+                : QuoteSchema.parse({
+                    quoteId: `Q-POC-${randomUUID().slice(0, 8).toUpperCase()}`,
+                    status: "Draft",
+                    createdAt: new Date().toISOString(),
+                    productType: "generic_commercial",
+                    insured: submission?.insured,
+                    broker: submission?.broker,
+                    risk: submission?.risk,
+                    dataQuality: submission?.dataQuality
+                })));
+            await timePhase("create_quote", "save_quote", () => saveQuote(quote));
+            logMcp("quote", { tool: "create_quote", quoteId: quote.quoteId, productType: quote.productType });
+            return {
+                content: [
+                    { type: "text", text: `Quote ${quote.quoteId} created. The quote record UI is rendered inline in Claude.` }
+                ],
+                structuredContent: quote
+            };
+        });
     });
     registerAppTool(server, "get_quote", {
         title: "Get Quote",
         description: "Retrieve a quote by id or list quotes for selection, optionally filtered by product type.",
         inputSchema: {
             quoteId: z.string().optional(),
-            productType: ProductTypeSchema.optional()
+            productType: ProductTypeSchema.optional(),
+            view: z.enum(["record", "data_points"]).optional().describe("Preferred embedded UI view when retrieving a single quote")
         },
         _meta: {
             ui: { resourceUri: quoteRecordResourceUri }
         }
-    }, async ({ quoteId, productType }) => {
-        if (quoteId) {
-            const quote = await getQuote(quoteId);
+    }, async ({ quoteId, productType, view }) => {
+        return timeTool("get_quote", { quoteId, productType, view }, async () => {
+            if (quoteId) {
+                const quote = await timePhase("get_quote", "get_quote", () => getQuote(quoteId));
+                logMcp("quote", { tool: "get_quote", quoteId: quote.quoteId, productType: quote.productType });
+                return {
+                    content: [{ type: "text", text: JSON.stringify(quote, null, 2) }],
+                    structuredContent: view ? { quote, view } : quote
+                };
+            }
+            const quotes = await timePhase("get_quote", "list_quotes", () => listQuotes(productType));
+            logMcp("quote_list", { tool: "get_quote", productType, count: quotes.length });
             return {
-                content: [{ type: "text", text: JSON.stringify(quote, null, 2) }],
-                structuredContent: quote
+                content: [{ type: "text", text: JSON.stringify({ productType, quotes }, null, 2) }],
+                structuredContent: { productType, quotes }
             };
-        }
-        const quotes = await listQuotes(productType);
-        return {
-            content: [{ type: "text", text: JSON.stringify({ productType, quotes }, null, 2) }],
-            structuredContent: { productType, quotes }
-        };
+        });
     });
     server.tool("update_quote_status", "Update the quote status.", { quoteId: z.string(), status: z.enum(["Draft", "In Review", "Quoted", "Declined"]) }, async ({ quoteId, status }) => {
-        const quote = await updateQuote(quoteId, { status });
-        return {
-            content: [{ type: "text", text: `Quote ${quoteId} status updated to ${status}.` }],
-            structuredContent: quote
-        };
+        return timeTool("update_quote_status", { quoteId, status }, async () => {
+            const quote = await timePhase("update_quote_status", "update_quote", () => updateQuote(quoteId, { status }));
+            return {
+                content: [{ type: "text", text: `Quote ${quoteId} status updated to ${status}.` }],
+                structuredContent: quote
+            };
+        });
     });
     server.tool("update_quote", "Update editable quote fields.", {
         quoteId: z.string(),
@@ -294,16 +381,23 @@ function registerTools(server) {
         broker: SubmissionSchema.shape.broker.optional(),
         risk: SubmissionSchema.shape.risk.optional()
     }, async ({ quoteId, insured, broker, risk }) => {
-        const patch = {
-            ...(insured ? { insured } : {}),
-            ...(broker ? { broker } : {}),
-            ...(risk ? { risk } : {})
-        };
-        const quote = await updateQuote(quoteId, patch);
-        return {
-            content: [{ type: "text", text: `Quote ${quoteId} updated.` }],
-            structuredContent: quote
-        };
+        return timeTool("update_quote", {
+            quoteId,
+            insured: Boolean(insured),
+            broker: Boolean(broker),
+            risk: Boolean(risk)
+        }, async () => {
+            const patch = {
+                ...(insured ? { insured } : {}),
+                ...(broker ? { broker } : {}),
+                ...(risk ? { risk } : {})
+            };
+            const quote = await timePhase("update_quote", "update_quote", () => updateQuote(quoteId, patch));
+            return {
+                content: [{ type: "text", text: `Quote ${quoteId} updated.` }],
+                structuredContent: quote
+            };
+        });
     });
 }
 export function registerMcpPrimitives(server) {
