@@ -458,6 +458,7 @@ type QuoteBrowserProps = {
 
 function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
   const [activeFilter, setActiveFilter] = React.useState<Quote["productType"] | "all">("all");
+  const [expandedQuoteId, setExpandedQuoteId] = React.useState<string | null>(null);
 
   async function applyFilter(productType: Quote["productType"] | "all") {
     setActiveFilter(productType);
@@ -465,7 +466,7 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
   }
 
   return (
-    <main className="shell">
+    <main className="shell browser-shell">
       <section className="hero browser-hero">
         <div>
           <p className="eyebrow">Quote Browser</p>
@@ -485,37 +486,60 @@ function QuoteBrowser({ quotes, onSelect, onFilter }: QuoteBrowserProps) {
             <thead>
               <tr>
                 <th>Quote</th>
-                <th>Product</th>
                 <th>Status</th>
                 <th>Insured</th>
                 <th>Broker</th>
-                <th>Class</th>
-                <th>Underwriter</th>
-                <th>Created</th>
-                <th></th>
+                <th><span className="visually-hidden">Actions</span></th>
               </tr>
             </thead>
             <tbody>
-              {quotes.map((quote) => (
-                <tr key={quote.quoteId}>
-                  <td><strong>{quote.quoteId}</strong></td>
-                  <td>{formatProductType(quote.productType)}</td>
-                  <td><span className={`status compact ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span></td>
-                  <td>{quote.insuredName ?? "Missing"}</td>
-                  <td>{quote.brokerName ?? "Missing"}</td>
-                  <td>{quote.classOfBusiness ?? "Missing"}</td>
-                  <td>{quote.underwriterName ?? "Unallocated"}</td>
-                  <td>{new Date(quote.createdAt).toLocaleString()}</td>
-                  <td>
-                    <button className="icon-button" type="button" aria-label={`Open ${quote.quoteId}`} onClick={() => onSelect(quote.quoteId)}>
-                      <Eye size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {quotes.map((quote) => {
+                const isExpanded = expandedQuoteId === quote.quoteId;
+                return (
+                  <React.Fragment key={quote.quoteId}>
+                    <tr>
+                      <td>
+                        <strong>{quote.quoteId}</strong>
+                        <span className="mobile-detail">{formatProductType(quote.productType)}</span>
+                      </td>
+                      <td><span className={`status compact ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span></td>
+                      <td>{quote.insuredName ?? "Missing"}</td>
+                      <td>{quote.brokerName ?? "Missing"}</td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            className="icon-button"
+                            type="button"
+                            aria-label={`${isExpanded ? "Hide" : "Show"} details for ${quote.quoteId}`}
+                            aria-expanded={isExpanded}
+                            onClick={() => setExpandedQuoteId(isExpanded ? null : quote.quoteId)}
+                          >
+                            <ChevronDown className={isExpanded ? "is-open" : ""} size={18} />
+                          </button>
+                          <button className="icon-button" type="button" aria-label={`Open ${quote.quoteId}`} onClick={() => onSelect(quote.quoteId)}>
+                            <Eye size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="quote-detail-row">
+                        <td colSpan={5}>
+                          <dl className="quote-detail-list">
+                            <dt>Product</dt><dd>{formatProductType(quote.productType)}</dd>
+                            <dt>Class</dt><dd>{quote.classOfBusiness ?? "Missing"}</dd>
+                            <dt>Underwriter</dt><dd>{quote.underwriterName ?? "Unallocated"}</dd>
+                            <dt>Created</dt><dd>{new Date(quote.createdAt).toLocaleString()}</dd>
+                          </dl>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
               {quotes.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="empty-state">No quotes found for this filter.</td>
+                  <td colSpan={5} className="empty-state">No quotes found for this filter.</td>
                 </tr>
               )}
             </tbody>

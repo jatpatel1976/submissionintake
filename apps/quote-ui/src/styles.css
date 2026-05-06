@@ -501,12 +501,92 @@ button:active:not(:disabled) {
   grid-column: auto;
 }
 
+.browser-shell {
+  width: min(100%, 820px);
+}
+
 .quote-browser table {
-  min-width: 860px;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.quote-browser th:nth-child(1),
+.quote-browser td:nth-child(1) {
+  width: 25%;
+}
+
+.quote-browser th:nth-child(2),
+.quote-browser td:nth-child(2) {
+  width: 88px;
+}
+
+.quote-browser th:nth-child(5),
+.quote-browser td:nth-child(5) {
+  width: 92px;
+}
+
+.quote-browser td {
+  vertical-align: middle;
 }
 
 .quote-browser .icon-button {
   margin: 0;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.row-actions .icon-button {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+}
+
+.row-actions svg {
+  transition: transform 140ms ease;
+}
+
+.row-actions svg.is-open {
+  transform: rotate(180deg);
+}
+
+.quote-detail-row td {
+  width: auto;
+  padding: 0;
+  background: #292825;
+}
+
+.quote-detail-row:hover {
+  background: transparent;
+}
+
+.quote-detail-list {
+  grid-template-columns: minmax(90px, 120px) minmax(0, 1fr);
+  gap: 8px 14px;
+  padding: 12px;
+}
+
+.mobile-detail {
+  display: none;
+  margin-top: 4px;
+  color: #aaa39a;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .empty-state {
@@ -582,8 +662,31 @@ button:active:not(:disabled) {
 
   table,
   .quote-browser table {
-    min-width: 640px;
     font-size: 12px;
+  }
+
+  .quote-browser th:nth-child(1),
+  .quote-browser td:nth-child(1) {
+    width: 34%;
+  }
+
+  .quote-browser th:nth-child(2),
+  .quote-browser td:nth-child(2) {
+    width: 78px;
+  }
+
+  .quote-browser th:nth-child(4),
+  .quote-browser td:nth-child(4) {
+    display: none;
+  }
+
+  .quote-browser th:nth-child(5),
+  .quote-browser td:nth-child(5) {
+    width: 84px;
+  }
+
+  .mobile-detail {
+    display: block;
   }
 
   th,
