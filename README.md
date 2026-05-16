@@ -6,7 +6,7 @@ It includes:
 
 - A local MCP server for Claude Desktop
 - Tools to classify a document, extract submission data from pasted text or machine-readable PDFs, create a quote, browse quotes and retrieve/update a quote
-- A Claude-style dark React/Vite quote record UI embedded inline in Claude as an MCP App iframe
+- A Claude-style dark React/Vite quote record UI embedded inline in Claude as an MCP App iframe, with record, data-points and entity graph views
 - A simple underwriting review workflow that updates quote status and allocates an underwriter
 - A Markdown submission intake playbook that drives classification indicators, extraction labels, defaults and data quality checks
 - A sample broker submission text file you can upload or attach in Claude Desktop
@@ -53,6 +53,35 @@ You can still run the UI standalone during local frontend development:
 ```bash
 npm run dev:ui
 ```
+
+The standalone UI needs the Quote API from the MCP server process. Run both commands in separate terminals for browser-based webview development:
+
+```bash
+npm run dev:server
+npm run dev:ui
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5173/
+```
+
+To open a specific quote directly in the entity graph view:
+
+```text
+http://127.0.0.1:5173/?quoteId=Q-POC-8F16BD57&view=graph
+```
+
+You can also use:
+
+```text
+view=record
+view=data_points
+view=graph
+```
+
+The graph view is currently implemented as a client-side webview projection of the quote payload. It does not require any quote JSON or server schema changes. The embedded MCP app uses the same built UI bundle, but the `get_quote` MCP tool currently documents `record` and `data_points` as preferred tool-requested views; use the UI's Graph tab after the quote opens in Claude Desktop.
 
 ## 4. Run the MCP server locally for testing
 
@@ -224,6 +253,10 @@ Use get_quote with quoteId Q-POC-4888587E and view data_points.
 ```
 
 The same embedded quote UI will render a stable extraction screen with confidence, evidence, missing fields, warnings and product-specific schedules where available.
+
+The quote UI also includes an entity graph view. It shows the insured, broker, risk, coverage, property locations, losses, attachments and data-quality signals as relationship nodes where available. Nodes are coloured with a red/amber/green accuracy indicator based on extraction confidence, missing fields and warning signals. Use the graph toolbar to recenter the view around the insured, risk or broker.
+
+Locations, coverage lines, loss history, attachments and data quality are grouped by default to keep the graph readable. Select a group node and use `Expand group` or `Collapse group` to show or hide the individual entries. Nodes can be dragged around the graph canvas to make relationships easier to inspect, and `Reset layout` returns the graph to its default grouped layout. Double-click a node, or select it and click `Open detail`, to jump back to the relevant quote record or data-points view.
 
 The MCP tools expect Claude to pass the uploaded document text from the prompt into the tool call. They no longer require or accept an absolute local file path for submission processing.
 

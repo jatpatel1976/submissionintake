@@ -1,7 +1,23 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App as McpApp } from "@modelcontextprotocol/ext-apps";
-import { AlertTriangle, CheckCircle2, ChevronDown, Eye, FileText, Pencil, Save, Send, ShieldCheck, X } from "lucide-react";
+import {
+  applyNodeChanges,
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  type Edge as FlowEdge,
+  type Node as FlowNode,
+  type NodeChange,
+  type NodeProps,
+  type OnNodeDrag
+} from "@xyflow/react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, FileText, GitBranch, Minus, Pencil, Plus, RotateCcw, Save, Send, ShieldCheck, X } from "lucide-react";
+import "@xyflow/react/dist/style.css";
 import "./styles.css";
 
 type DataQuality = {
@@ -99,7 +115,8 @@ type ToolResult = {
   structuredContent?: unknown;
 };
 
-type ViewMode = "record" | "data_points";
+type ViewMode = "record" | "data_points" | "graph";
+type DetailViewMode = Exclude<ViewMode, "graph">;
 
 const API_BASE = "http://localhost:8787";
 const isEmbeddedMcpApp = window.parent !== window;
@@ -181,7 +198,11 @@ function useQuote() {
 
     const params = new URLSearchParams(window.location.search);
     const quoteId = params.get("quoteId");
-    const requestedView = params.get("view") === "data_points" ? "data_points" : "record";
+    const requestedView = params.get("view") === "data_points"
+      ? "data_points"
+      : params.get("view") === "graph"
+        ? "graph"
+        : "record";
     setView(requestedView);
     if (!quoteId) {
       fetch(`${API_BASE}/api/quotes`)
@@ -540,6 +561,629 @@ function DataPointSection({ title, children }: { title: string; children: React.
   );
 }
 
+type GraphCenter = "insured" | "risk" | "broker";
+type RagStatus = "red" | "amber" | "green";
+type GraphGroup = "coverage" | "locations" | "lossHistory" | "attachments" | "quality";
+type NodePosition = { x: number; y: number };
+
+type EntityNode = {
+  id: string;
+  type: "insured" | "broker" | "risk" | "coverage" | "location" | "loss" | "attachment" | "underwriting" | "quality" | "group";
+  label: string;
+  subtitle?: string;
+  confidence?: number;
+  rag: RagStatus;
+  detailView: DetailViewMode;
+  groupKey?: GraphGroup;
+  isGroup?: boolean;
+  isExpanded?: boolean;
+  childCount?: number;
+  parentId?: string;
+};
+
+type EntityEdge = {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+};
+
+type PositionedEntityNode = EntityNode & {
+  x: number;
+  y: number;
+};
+
+type EntityNodeData = EntityNode & {
+  isCenter: boolean;
+};
+
+type EntityFlowNode = FlowNode<EntityNodeData, "entity">;
+type EntityFlowEdge = FlowEdge<{ label: string }>;
+type NodeRectangle = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+const FLOW_WIDTH = 1000;
+const FLOW_HEIGHT = 650;
+
+function normalizeField(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9.]/g, "");
+}
+
+function confidenceForFields(dataQuality: DataQuality, fields: string[]) {
+  const normalizedFields = fields.map(normalizeField);
+  const matches = dataQuality.evidence?.filter((item) => normalizedFields.some((field) => normalizeField(item.field).includes(field)));
+  if (!matches?.length) return dataQuality.confidence;
+  return Math.min(...matches.map((item) => item.confidence));
+}
+
+function hasMissingField(dataQuality: DataQuality, fields: string[]) {
+  const normalizedFields = fields.map(normalizeField);
+  return dataQuality.missingFields.some((missingField) => normalizedFields.some((field) => normalizeField(missingField).includes(field)));
+}
+
+function hasWarningSignal(dataQuality: DataQuality, searchTerms: string[]) {
+  const normalizedTerms = searchTerms.map((term) => term.toLowerCase()).filter(Boolean);
+  return dataQuality.warnings.some((warning) => normalizedTerms.some((term) => warning.toLowerCase().includes(term)));
+}
+
+function ragForEntity(dataQuality: DataQuality, fields: string[], searchTerms: string[] = []): { rag: RagStatus; confidence: number } {
+  const confidence = confidenceForFields(dataQuality, fields);
+  if (hasMissingField(dataQuality, fields) || confidence < 0.6) return { rag: "red", confidence };
+  if (confidence < 0.85 || hasWarningSignal(dataQuality, searchTerms)) return { rag: "amber", confidence };
+  return { rag: "green", confidence };
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function sumNumbers(values: Array<number | undefined>) {
+  return values.reduce<number>((total, value) => total + (value ?? 0), 0);
+}
+
+function buildQuoteGraph(quote: Quote, center: GraphCenter, expandedGroups: Set<GraphGroup>): { nodes: PositionedEntityNode[]; edges: EntityEdge[] } {
+  const property = getPropertyData(quote);
+  const dataQuality = quote.productSubmission?.dataQuality ?? quote.dataQuality;
+  const nodes: EntityNode[] = [];
+  const edges: EntityEdge[] = [];
+
+  function addNode(node: EntityNode) {
+    if (!nodes.some((existing) => existing.id === node.id)) nodes.push(node);
+  }
+
+  function addEdge(source: string, target: string, label: string) {
+    if (source === target) return;
+    const id = `${source}-${target}-${label}`;
+    if (!edges.some((edge) => edge.id === id)) edges.push({ id, source, target, label });
+  }
+
+  function isExpanded(groupKey: GraphGroup) {
+    return expandedGroups.has(groupKey);
+  }
+
+  function addGroupNode(node: Omit<EntityNode, "isGroup" | "isExpanded"> & { groupKey: GraphGroup }) {
+    addNode({
+      ...node,
+      type: node.type,
+      isGroup: true,
+      isExpanded: isExpanded(node.groupKey)
+    });
+  }
+
+  const insuredQuality = ragForEntity(dataQuality, ["insured"], [quote.insured.name ?? "", property?.insured?.name ?? ""]);
+  addNode({
+    id: "insured",
+    type: "insured",
+    label: quote.insured.name ?? property?.insured?.name ?? "Insured",
+    subtitle: quote.insured.trade ?? property?.insured?.industryCode ?? "Named insured",
+    detailView: "record",
+    ...insuredQuality
+  });
+
+  const brokerQuality = ragForEntity(dataQuality, ["broker"], [quote.broker?.name ?? "", property?.broker?.name ?? ""]);
+  addNode({
+    id: "broker",
+    type: "broker",
+    label: quote.broker?.name ?? property?.broker?.name ?? "Broker",
+    subtitle: quote.broker?.contact ?? property?.broker?.email ?? "Broker details",
+    detailView: "record",
+    ...brokerQuality
+  });
+
+  const riskQuality = ragForEntity(dataQuality, ["risk"], [quote.risk.classOfBusiness ?? ""]);
+  addNode({
+    id: "risk",
+    type: "risk",
+    label: quote.risk.classOfBusiness ?? "Risk",
+    subtitle: quote.risk.inceptionDate ? `Inception ${quote.risk.inceptionDate}` : "Risk details",
+    detailView: "record",
+    ...riskQuality
+  });
+
+  addEdge("insured", "broker", "submitted via");
+  addEdge("insured", "risk", "has risk");
+  addEdge("broker", "risk", "placed");
+
+  const coverQuality = ragForEntity(dataQuality, ["coverage"], quote.risk.coversRequested);
+  addGroupNode({
+    id: "coverage",
+    type: "coverage",
+    label: property ? "Property coverage" : "Covers requested",
+    subtitle: `${quote.risk.coversRequested.length} cover${quote.risk.coversRequested.length === 1 ? "" : "s"}`,
+    detailView: "data_points",
+    groupKey: "coverage",
+    childCount: quote.risk.coversRequested.length,
+    ...coverQuality
+  });
+  addEdge("risk", "coverage", "requests");
+
+  if (isExpanded("coverage")) {
+    quote.risk.coversRequested.forEach((cover, index) => {
+      addNode({
+        id: `coverage-${index}`,
+        type: "coverage",
+        label: cover,
+        subtitle: property?.coverage.buildingsAndLandlordContents && index === 0 ? formatCurrency(property.coverage.buildingsAndLandlordContents) : "Cover line",
+        detailView: "data_points",
+        parentId: "coverage",
+        ...coverQuality
+      });
+      addEdge("coverage", `coverage-${index}`, "includes");
+    });
+  }
+
+  if (property) {
+    const underwritingQuality = ragForEntity(dataQuality, ["underwriting"], [property.underwriting?.brokerInstructions ?? ""]);
+    addNode({
+      id: "underwriting",
+      type: "underwriting",
+      label: "Underwriting data",
+      subtitle: property.underwriting?.accountMarketingBasis ?? "Review requirements",
+      detailView: "data_points",
+      ...underwritingQuality
+    });
+    addEdge("risk", "underwriting", "reviewed against");
+
+    const locationQuality = ragForEntity(dataQuality, ["locations"], property.locations.flatMap((location) => [location.name, location.notes ?? "", location.occupancy ?? ""]));
+    const totalTiv = sumNumbers(property.locations.map((location) => location.tiv));
+    addGroupNode({
+      id: "locations",
+      type: "location",
+      label: "Locations",
+      subtitle: totalTiv ? `${formatCount(property.locations.length, "location")} - ${formatCurrency(totalTiv)}` : formatCount(property.locations.length, "location"),
+      detailView: "data_points",
+      groupKey: "locations",
+      childCount: property.locations.length,
+      ...locationQuality
+    });
+    addEdge("risk", "locations", "exposes");
+
+    if (isExpanded("locations")) property.locations.slice(0, 10).forEach((location, index) => {
+      const id = `location-${index}`;
+      addNode({
+        id,
+        type: "location",
+        label: location.name,
+        subtitle: location.tiv ? `TIV ${formatCurrency(location.tiv)}` : location.occupancy ?? "Location",
+        detailView: "data_points",
+        parentId: "locations",
+        ...locationQuality
+      });
+      addEdge("locations", id, "premises");
+    });
+
+    const lossQuality = ragForEntity(dataQuality, ["losshistory"], property.lossHistory.flatMap((loss) => [loss.type ?? "", loss.description ?? ""]));
+    const totalLossPaid = sumNumbers(property.lossHistory.map((loss) => loss.paid));
+    addGroupNode({
+      id: "loss-history",
+      type: "loss",
+      label: "Loss history",
+      subtitle: totalLossPaid ? `${formatCount(property.lossHistory.length, "loss", "losses")} - paid ${formatCurrency(totalLossPaid)}` : formatCount(property.lossHistory.length, "loss", "losses"),
+      detailView: "data_points",
+      groupKey: "lossHistory",
+      childCount: property.lossHistory.length,
+      ...lossQuality
+    });
+    addEdge("risk", "loss-history", "loss history");
+
+    if (isExpanded("lossHistory")) property.lossHistory.slice(0, 8).forEach((loss, index) => {
+      const id = `loss-${index}`;
+      addNode({
+        id,
+        type: "loss",
+        label: loss.type ?? `Loss ${index + 1}`,
+        subtitle: [loss.date, formatCurrency(loss.paid)].filter(Boolean).join(" - "),
+        detailView: "data_points",
+        parentId: "loss-history",
+        ...lossQuality
+      });
+      addEdge("loss-history", id, "entry");
+    });
+
+    if (property.attachments?.length) {
+      const issueCount = property.attachments.filter((attachment) => attachment.potentialIssue).length;
+      addGroupNode({
+        id: "attachments",
+        type: "attachment",
+        label: "Attachments",
+        subtitle: issueCount ? `${formatCount(property.attachments.length, "file")} - ${formatCount(issueCount, "issue")}` : formatCount(property.attachments.length, "file"),
+        confidence: dataQuality.confidence,
+        rag: issueCount ? "amber" : "green",
+        detailView: "data_points",
+        groupKey: "attachments",
+        childCount: property.attachments.length
+      });
+      addEdge("risk", "attachments", "supported by");
+
+      if (isExpanded("attachments")) property.attachments.slice(0, 8).forEach((attachment, index) => {
+        const isIssue = Boolean(attachment.potentialIssue);
+        const id = `attachment-${index}`;
+        addNode({
+          id,
+          type: "attachment",
+          label: attachment.name,
+          subtitle: attachment.potentialIssue ?? attachment.status ?? "Attachment",
+          confidence: dataQuality.confidence,
+          rag: isIssue ? "amber" : "green",
+          detailView: "data_points",
+          parentId: "attachments"
+        });
+        addEdge("attachments", id, "file");
+      });
+    }
+  }
+
+  if (dataQuality.missingFields.length || dataQuality.warnings.length) {
+    addGroupNode({
+      id: "quality",
+      type: "quality",
+      label: "Data quality",
+      subtitle: `${dataQuality.missingFields.length} missing, ${dataQuality.warnings.length} warning${dataQuality.warnings.length === 1 ? "" : "s"}`,
+      confidence: dataQuality.confidence,
+      rag: dataQuality.missingFields.length ? "red" : "amber",
+      detailView: "data_points",
+      groupKey: "quality",
+      childCount: Number(dataQuality.missingFields.length > 0) + Number(dataQuality.warnings.length > 0)
+    });
+    addEdge("risk", "quality", "flags");
+
+    if (isExpanded("quality")) {
+      if (dataQuality.missingFields.length) {
+        addNode({
+          id: "quality-missing",
+          type: "quality",
+          label: "Missing fields",
+          subtitle: dataQuality.missingFields.slice(0, 3).join(", "),
+          confidence: dataQuality.confidence,
+          rag: "red",
+          detailView: "data_points",
+          parentId: "quality"
+        });
+        addEdge("quality", "quality-missing", "missing");
+      }
+      if (dataQuality.warnings.length) {
+        addNode({
+          id: "quality-warnings",
+          type: "quality",
+          label: "Warnings",
+          subtitle: dataQuality.warnings.slice(0, 2).join("; "),
+          confidence: dataQuality.confidence,
+          rag: "amber",
+          detailView: "data_points",
+          parentId: "quality"
+        });
+        addEdge("quality", "quality-warnings", "review");
+      }
+    }
+  }
+
+  const centerIndex = nodes.findIndex((node) => node.id === center);
+  const orderedNodes = centerIndex >= 0
+    ? [nodes[centerIndex], ...nodes.slice(0, centerIndex), ...nodes.slice(centerIndex + 1)]
+    : nodes;
+
+  const positioned: PositionedEntityNode[] = [];
+  orderedNodes.forEach((node, index) => {
+    if (index === 0) {
+      positioned.push({ ...node, x: 50, y: 50 });
+      return;
+    }
+    if (node.parentId) {
+      const parent = positioned.find((candidate) => candidate.id === node.parentId);
+      const siblings = orderedNodes.filter((candidate) => candidate.parentId === node.parentId);
+      const siblingIndex = siblings.findIndex((candidate) => candidate.id === node.id);
+      const angle = (siblingIndex / Math.max(siblings.length, 1)) * Math.PI * 2 - Math.PI / 2;
+      const parentX = parent?.x ?? 50;
+      const parentY = parent?.y ?? 50;
+      positioned.push({
+        ...node,
+        x: Math.max(8, Math.min(92, parentX + Math.cos(angle) * 18)),
+        y: Math.max(10, Math.min(90, parentY + Math.sin(angle) * 15))
+      });
+      return;
+    }
+    const topLevelNodes = orderedNodes.filter((candidate) => !candidate.parentId).slice(1);
+    const topLevelIndex = topLevelNodes.findIndex((candidate) => candidate.id === node.id);
+    const angle = (topLevelIndex / Math.max(topLevelNodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
+    const isPrimary = ["insured", "broker", "risk", "coverage", "quality", "locations", "loss-history", "attachments"].includes(node.id);
+    const radiusX = isPrimary ? 31 : 38;
+    const radiusY = isPrimary ? 25 : 32;
+    positioned.push({
+      ...node,
+      x: 50 + Math.cos(angle) * radiusX,
+      y: 50 + Math.sin(angle) * radiusY
+    });
+  });
+
+  return { nodes: positioned, edges };
+}
+
+function nodeDimensions(node: EntityNode, isCenter = false) {
+  if (isCenter) return { width: 180, height: 102 };
+  if (node.isGroup) return { width: 150, height: 76 };
+  return { width: 156, height: 86 };
+}
+
+function graphPositionToFlowPosition(node: PositionedEntityNode, isCenter: boolean) {
+  const { width, height } = nodeDimensions(node, isCenter);
+  return {
+    x: (node.x / 100) * FLOW_WIDTH - width / 2,
+    y: (node.y / 100) * FLOW_HEIGHT - height / 2
+  };
+}
+
+function entityToFlowNode(node: PositionedEntityNode, center: GraphCenter, savedPosition?: NodePosition): EntityFlowNode {
+  const isCenter = node.id === center;
+  return {
+    id: node.id,
+    type: "entity",
+    position: savedPosition ?? graphPositionToFlowPosition(node, isCenter),
+    data: {
+      ...node,
+      isCenter
+    }
+  };
+}
+
+function getFlowNodeRectangle(node: EntityFlowNode): NodeRectangle {
+  const dimensions = nodeDimensions(node.data, node.data.isCenter);
+  return {
+    x: node.position.x,
+    y: node.position.y,
+    width: node.width ?? dimensions.width,
+    height: node.height ?? dimensions.height
+  };
+}
+
+function sideFacingTarget(sourceRect: NodeRectangle, targetRect: NodeRectangle) {
+  const sourceCenter = getNodeCenter(sourceRect);
+  const targetCenter = getNodeCenter(targetRect);
+  const dx = targetCenter.x - sourceCenter.x;
+  const dy = targetCenter.y - sourceCenter.y;
+  if (Math.abs(dx) > Math.abs(dy)) return dx >= 0 ? Position.Right : Position.Left;
+  return dy >= 0 ? Position.Bottom : Position.Top;
+}
+
+function handleId(type: "source" | "target", position: Position) {
+  return `${type}-${position}`;
+}
+
+function entityToFlowEdge(edge: EntityEdge, selectedNodeId: string, flowNodesById: Map<string, EntityFlowNode>): EntityFlowEdge {
+  const isSelectedEdge = edge.source === selectedNodeId || edge.target === selectedNodeId;
+  const sourceNode = flowNodesById.get(edge.source);
+  const targetNode = flowNodesById.get(edge.target);
+  const sourceSide = sourceNode && targetNode ? sideFacingTarget(getFlowNodeRectangle(sourceNode), getFlowNodeRectangle(targetNode)) : Position.Bottom;
+  const targetSide = sourceNode && targetNode ? sideFacingTarget(getFlowNodeRectangle(targetNode), getFlowNodeRectangle(sourceNode)) : Position.Top;
+
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    type: "default",
+    sourceHandle: handleId("source", sourceSide),
+    targetHandle: handleId("target", targetSide),
+    label: edge.label,
+    data: { label: edge.label },
+    className: isSelectedEdge ? "is-selected-edge" : undefined,
+    markerEnd: {
+      type: MarkerType.ArrowClosed
+    }
+  };
+}
+
+function getNodeCenter(rect: NodeRectangle) {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2
+  };
+}
+
+const EntityFlowNodeCard = React.memo(function EntityFlowNodeCard({ data, selected }: NodeProps<EntityFlowNode>) {
+  return (
+    <div
+      className={`entity-flow-node ${data.rag} ${data.isCenter ? "is-center" : ""} ${selected ? "is-selected" : ""} ${data.isGroup ? "is-group" : ""} ${data.isExpanded ? "is-expanded" : ""}`}
+    >
+      <Handle className="entity-flow-handle" type="target" position={Position.Top} id="target-top" />
+      <Handle className="entity-flow-handle" type="target" position={Position.Right} id="target-right" />
+      <Handle className="entity-flow-handle" type="target" position={Position.Bottom} id="target-bottom" />
+      <Handle className="entity-flow-handle" type="target" position={Position.Left} id="target-left" />
+      <Handle className="entity-flow-handle" type="source" position={Position.Top} id="source-top" />
+      <Handle className="entity-flow-handle" type="source" position={Position.Right} id="source-right" />
+      <Handle className="entity-flow-handle" type="source" position={Position.Bottom} id="source-bottom" />
+      <Handle className="entity-flow-handle" type="source" position={Position.Left} id="source-left" />
+      <span className="entity-node-topline">
+        <span className="entity-node-type">{data.isGroup ? "group" : data.type}</span>
+        {data.isGroup && <span className="entity-node-count">{data.isExpanded ? <Minus size={12} /> : <Plus size={12} />}{data.childCount}</span>}
+      </span>
+      <strong>{data.label}</strong>
+      {data.subtitle && <small>{data.subtitle}</small>}
+      {selected && <span className="entity-node-confidence">{formatPercent(data.confidence)}</span>}
+    </div>
+  );
+});
+
+const nodeTypes = { entity: EntityFlowNodeCard };
+
+function EntityGraphView({ quote, onViewChange }: { quote: Quote; onViewChange: (view: ViewMode) => void }) {
+  const [center, setCenter] = React.useState<GraphCenter>("insured");
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string>("insured");
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<GraphGroup>>(() => new Set());
+  const [nodePositions, setNodePositions] = React.useState<Record<string, NodePosition>>({});
+  const graph = React.useMemo(() => {
+    const builtGraph = buildQuoteGraph(quote, center, expandedGroups);
+    const nodes = builtGraph.nodes;
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    return {
+      ...builtGraph,
+      nodes,
+      nodesById
+    };
+  }, [quote, center, expandedGroups]);
+  const [flowNodes, setFlowNodes] = React.useState<EntityFlowNode[]>(() => (
+    graph.nodes.map((node) => entityToFlowNode(node, center, nodePositions[node.id]))
+  ));
+  const selectedNode = graph.nodesById.get(selectedNodeId) ?? graph.nodes[0];
+  const flowEdges = React.useMemo(
+    () => {
+      const flowNodesById = new Map(flowNodes.map((node) => [node.id, node]));
+      return graph.edges.map((edge) => entityToFlowEdge(edge, selectedNode.id, flowNodesById));
+    },
+    [flowNodes, graph.edges, selectedNode.id]
+  );
+
+  React.useEffect(() => {
+    if (!graph.nodesById.has(selectedNodeId)) {
+      setSelectedNodeId(graph.nodes[0]?.id ?? "insured");
+    }
+  }, [graph.nodes, graph.nodesById, selectedNodeId]);
+
+  React.useEffect(() => {
+    setFlowNodes(graph.nodes.map((node) => entityToFlowNode(node, center, nodePositions[node.id])));
+  }, [center, graph.nodes, nodePositions]);
+
+  function openNode(node: EntityNode) {
+    onViewChange(node.detailView);
+  }
+
+  function toggleGroup(groupKey: GraphGroup) {
+    setExpandedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }
+
+  function resetLayout() {
+    setNodePositions({});
+    setExpandedGroups(new Set());
+    setSelectedNodeId(center);
+  }
+
+  function handleNodesChange(changes: NodeChange<EntityFlowNode>[]) {
+    setFlowNodes((currentNodes) => applyNodeChanges(changes, currentNodes));
+  }
+
+  const handleNodeDragStop: OnNodeDrag<EntityFlowNode> = (_event, node) => {
+    setNodePositions((current) => ({
+      ...current,
+      [node.id]: node.position
+    }));
+  };
+
+  return (
+    <main className="shell graph-shell">
+      <section className="hero graph-hero">
+        <div>
+          <p className="eyebrow">Entity Graph</p>
+          <h1>{quote.quoteId}</h1>
+          <p className="muted">{quote.insured.name ?? "Submission entities"}</p>
+        </div>
+        <div className="hero-actions">
+          <div className="view-actions" role="group" aria-label="Quote view">
+            <button type="button" onClick={() => onViewChange("record")}>Record</button>
+            <button type="button" onClick={() => onViewChange("data_points")}>Data Points</button>
+            <button className="active" type="button" onClick={() => onViewChange("graph")}><GitBranch size={14} /> Graph</button>
+          </div>
+        </div>
+      </section>
+
+      <section className="graph-toolbar" aria-label="Graph controls">
+        <div className="center-actions" role="group" aria-label="Graph center">
+          <button className={center === "insured" ? "active" : ""} type="button" onClick={() => setCenter("insured")}>Insured</button>
+          <button className={center === "risk" ? "active" : ""} type="button" onClick={() => setCenter("risk")}>Risk</button>
+          <button className={center === "broker" ? "active" : ""} type="button" onClick={() => setCenter("broker")}>Broker</button>
+        </div>
+        <button className="reset-layout-button" type="button" onClick={resetLayout}><RotateCcw size={14} /> Reset layout</button>
+        <div className="rag-legend" aria-label="RAG legend">
+          <span><i className="rag-dot green"></i>High</span>
+          <span><i className="rag-dot amber"></i>Review</span>
+          <span><i className="rag-dot red"></i>Low</span>
+        </div>
+      </section>
+
+      <section className="entity-graph-layout">
+        <div className="entity-graph-canvas" aria-label="Submission entity relationship graph">
+          <ReactFlow<EntityFlowNode, EntityFlowEdge>
+            nodes={flowNodes}
+            edges={flowEdges}
+            nodeTypes={nodeTypes}
+            onNodesChange={handleNodesChange}
+            onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+            onNodeDoubleClick={(_event, node) => openNode(node.data)}
+            onNodeDragStop={handleNodeDragStop}
+            fitView
+            fitViewOptions={{ padding: 0.18 }}
+            minZoom={0.45}
+            maxZoom={1.4}
+            proOptions={{ hideAttribution: true }}
+            nodesDraggable
+            nodesConnectable={false}
+            elementsSelectable
+          >
+            <Background color="#ffffff1f" gap={32} />
+            <Controls showInteractive={false} />
+            <MiniMap
+              pannable
+              zoomable
+              nodeColor={(node) => {
+                const rag = node.data.rag;
+                if (rag === "green") return "#2fb389";
+                if (rag === "red") return "#d96f5d";
+                return "#d9a46f";
+              }}
+              maskColor="rgba(36, 35, 33, 0.72)"
+            />
+          </ReactFlow>
+        </div>
+
+        <aside className="entity-detail-panel">
+          <span className={`rag-pill ${selectedNode.rag}`}>{selectedNode.rag}</span>
+          <h2>{selectedNode.label}</h2>
+          <p className="muted">{selectedNode.subtitle ?? selectedNode.type}</p>
+          <dl>
+            <dt>Entity</dt><dd>{selectedNode.type}</dd>
+            <dt>Accuracy</dt><dd>{formatPercent(selectedNode.confidence) || "Unknown"}</dd>
+            {selectedNode.isGroup && <><dt>Entries</dt><dd>{selectedNode.childCount ?? 0}</dd></>}
+            <dt>Detail</dt><dd>{selectedNode.detailView === "record" ? "Quote record" : "Data points"}</dd>
+          </dl>
+          {selectedNode.groupKey && (
+            <button type="button" onClick={() => toggleGroup(selectedNode.groupKey!)}>
+              {selectedNode.isExpanded ? <Minus size={16} /> : <Plus size={16} />}
+              {selectedNode.isExpanded ? "Collapse group" : "Expand group"}
+            </button>
+          )}
+          <button type="button" onClick={() => openNode(selectedNode)}>Open detail</button>
+        </aside>
+      </section>
+    </main>
+  );
+}
+
 function DataPointsView({ quote, onViewChange }: { quote: Quote; onViewChange: (view: ViewMode) => void }) {
   const property = getPropertyData(quote);
   const dataQuality = quote.productSubmission?.dataQuality ?? quote.dataQuality;
@@ -557,6 +1201,7 @@ function DataPointsView({ quote, onViewChange }: { quote: Quote; onViewChange: (
         <div className="view-actions" role="group" aria-label="Quote view">
           <button type="button" onClick={() => onViewChange("record")}>Record</button>
           <button className="active" type="button" onClick={() => onViewChange("data_points")}>Data Points</button>
+          <button type="button" onClick={() => onViewChange("graph")}><GitBranch size={14} /> Graph</button>
         </div>
       </section>
 
@@ -836,6 +1481,7 @@ function App() {
   if (quoteList) return <QuoteBrowser quotes={quoteList} onSelect={loadQuote} onFilter={loadQuoteList} />;
   if (!quote) return <main className="shell"><h1>{isConnecting ? "Connecting quote app..." : "Loading quote record..."}</h1></main>;
   if (view === "data_points") return <DataPointsView quote={quote} onViewChange={setView} />;
+  if (view === "graph") return <EntityGraphView quote={quote} onViewChange={setView} />;
 
   const confidence = Math.round(quote.dataQuality.confidence * 100);
   const isReviewAcknowledged = reviewWorkflowState === "complete" || quote.status === "In Review";
@@ -859,6 +1505,7 @@ function App() {
           <div className="view-actions" role="group" aria-label="Quote view">
             <button className="active" type="button" onClick={() => setView("record")}>Record</button>
             <button type="button" onClick={() => setView("data_points")}>Data Points</button>
+            <button type="button" onClick={() => setView("graph")}><GitBranch size={14} /> Graph</button>
           </div>
           <span className={`status ${quote.status.toLowerCase().replaceAll(" ", "-")}`}>{quote.status}</span>
         </div>
