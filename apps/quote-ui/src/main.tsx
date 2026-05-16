@@ -1029,8 +1029,8 @@ const EntityFlowNodeCard = React.memo(function EntityFlowNodeCard({ data, select
 const nodeTypes = { entity: EntityFlowNodeCard };
 
 function EntityGraphView({ quote, onViewChange }: { quote: Quote; onViewChange: (view: ViewMode) => void }) {
-  const [center, setCenter] = React.useState<GraphCenter>("insured");
-  const [selectedNodeId, setSelectedNodeId] = React.useState<string>("insured");
+  const [center, setCenter] = React.useState<GraphCenter>("risk");
+  const [selectedNodeId, setSelectedNodeId] = React.useState<string>("risk");
   const [expandedGroups, setExpandedGroups] = React.useState<Set<GraphGroup>>(() => new Set());
   const [nodePositions, setNodePositions] = React.useState<Record<string, NodePosition>>({});
   const graph = React.useMemo(() => {
