@@ -1165,6 +1165,16 @@ button:active:not(:disabled) {
   width: 34%;
 }
 
+.data-table-wrap.loss-history-wrap table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.loss-history-wrap th:first-child,
+.loss-history-wrap td:first-child {
+  width: 30%;
+}
+
 .location-schedule-wrap tr.is-selected-row td {
   background: #3b3732;
   box-shadow: inset 3px 0 0 #d9a46f;

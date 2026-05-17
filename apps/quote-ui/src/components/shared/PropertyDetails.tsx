@@ -143,9 +143,15 @@ export function PropertyCoverageDetails({ property, dataQuality, mode = "definit
 }
 
 export function LossHistoryPanel({ property, dataQuality }: { property: PropertyOwnersProductData; dataQuality?: DataQuality }) {
+  const [expandedLossKey, setExpandedLossKey] = useState<string | null>(null);
+
+  function toggleLossDetail(lossKey: string) {
+    setExpandedLossKey((currentKey) => currentKey === lossKey ? null : lossKey);
+  }
+
   return (
     <>
-      <div className="table-wrap data-table-wrap">
+      <div className="table-wrap data-table-wrap loss-history-wrap">
         <table>
           <thead>
             <tr>
@@ -153,19 +159,36 @@ export function LossHistoryPanel({ property, dataQuality }: { property: Property
               <th>Type</th>
               <th>Paid</th>
               <th>Reserved</th>
-              <th>Description</th>
             </tr>
           </thead>
           <tbody>
-            {property.lossHistory.map((loss, index) => (
-              <tr key={`${loss.date}-${index}`}>
-                <td>{loss.date ?? "Missing"}</td>
-                <td>{loss.type ?? "Missing"}</td>
-                <td>{formatCurrency(loss.paid)}</td>
-                <td>{formatCurrency(loss.reserved)}</td>
-                <td>{loss.description ?? ""}</td>
-              </tr>
-            ))}
+            {property.lossHistory.map((loss, index) => {
+              const lossKey = `${loss.date ?? "loss"}-${index}`;
+              const detailId = `loss-detail-${index}`;
+              const isExpanded = expandedLossKey === lossKey;
+
+              return (
+                <ExpandableTableRow
+                  colSpan={4}
+                  detailId={detailId}
+                  expandLabel={isExpanded ? "Hide description" : "Show description"}
+                  isExpanded={isExpanded}
+                  key={lossKey}
+                  onToggle={() => toggleLossDetail(lossKey)}
+                  cells={[
+                    loss.date ?? "Missing",
+                    loss.type ?? "Missing",
+                    formatCurrency(loss.paid),
+                    formatCurrency(loss.reserved)
+                  ]}
+                  detail={(
+                    <dl className="expandable-row-detail-list">
+                      <dt>Description</dt><dd>{loss.description ?? "Missing"}</dd>
+                    </dl>
+                  )}
+                />
+              );
+            })}
           </tbody>
         </table>
       </div>
