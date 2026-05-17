@@ -1,3 +1,5 @@
+import { useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import type { DataQuality, PropertyOwnersProductData } from "../../types";
 import { formatBoolean, formatCurrency } from "../../utils/formatting";
 import { getEvidence } from "../../utils/quote";
@@ -10,7 +12,56 @@ type LocationSchedulePanelProps = {
   onSelectLocation?: (index: number) => void;
 };
 
+export type ExpandableTableRowProps = {
+  cells: ReactNode[];
+  colSpan: number;
+  detail: ReactNode;
+  detailId: string;
+  expandLabel: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  className?: string;
+};
+
+export function ExpandableTableRow({ cells, colSpan, detail, detailId, expandLabel, isExpanded, onToggle, className }: ExpandableTableRowProps) {
+  const [primaryCell, ...remainingCells] = cells;
+
+  return (
+    <>
+      <tr className={className}>
+        <td>
+          <div className="expandable-row-primary">
+            {primaryCell}
+            <button
+              className="expandable-row-toggle"
+              type="button"
+              aria-expanded={isExpanded}
+              aria-controls={detailId}
+              onClick={onToggle}
+            >
+              <ChevronDown className={isExpanded ? "is-open" : ""} size={14} />
+              {expandLabel}
+            </button>
+          </div>
+        </td>
+        {remainingCells.map((cell, index) => <td key={index}>{cell}</td>)}
+      </tr>
+      {isExpanded && (
+        <tr className="expandable-detail-row">
+          <td colSpan={colSpan} id={detailId}>{detail}</td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 export function LocationSchedulePanel({ property, dataQuality, selectedLocationIndex, onSelectLocation }: LocationSchedulePanelProps) {
+  const [expandedLocationKey, setExpandedLocationKey] = useState<string | null>(null);
+
+  function toggleLocationDetail(locationKey: string) {
+    setExpandedLocationKey((currentKey) => currentKey === locationKey ? null : locationKey);
+  }
+
   return (
     <>
       <div className="table-wrap data-table-wrap location-schedule-wrap">
@@ -22,27 +73,41 @@ export function LocationSchedulePanel({ property, dataQuality, selectedLocationI
               <th>Built</th>
               <th>Stories</th>
               <th>TIV</th>
-              <th>Occupancy / notes</th>
             </tr>
           </thead>
           <tbody>
             {property.locations.map((location, index) => {
               const isSelected = selectedLocationIndex === index;
+              const locationKey = `${location.name}-${index}`;
+              const detailId = `location-detail-${index}`;
+              const isExpanded = expandedLocationKey === locationKey;
               return (
-                <tr className={isSelected ? "is-selected-row" : ""} key={location.name}>
-                  <td>
-                    {onSelectLocation ? (
+                <ExpandableTableRow
+                  className={isSelected ? "is-selected-row" : ""}
+                  colSpan={5}
+                  detailId={detailId}
+                  expandLabel={isExpanded ? "Hide details" : "Show details"}
+                  isExpanded={isExpanded}
+                  key={locationKey}
+                  onToggle={() => toggleLocationDetail(locationKey)}
+                  cells={[
+                    onSelectLocation ? (
                       <button className="table-row-button" type="button" onClick={() => onSelectLocation(index)}>
                         {location.name}
                       </button>
-                    ) : location.name}
-                  </td>
-                  <td>{location.construction ?? "Missing"}</td>
-                  <td>{location.yearBuilt ?? "Missing"}</td>
-                  <td>{location.stories ?? "Missing"}</td>
-                  <td>{formatCurrency(location.tiv)}</td>
-                  <td>{[location.occupancy, location.notes].filter(Boolean).join("; ")}</td>
-                </tr>
+                    ) : location.name,
+                    location.construction ?? "Missing",
+                    location.yearBuilt ?? "Missing",
+                    location.stories ?? "Missing",
+                    formatCurrency(location.tiv)
+                  ]}
+                  detail={(
+                    <dl className="expandable-row-detail-list">
+                      <dt>Occupancy</dt><dd>{location.occupancy ?? "Missing"}</dd>
+                      <dt>Notes</dt><dd>{location.notes ?? "Missing"}</dd>
+                    </dl>
+                  )}
+                />
               );
             })}
           </tbody>

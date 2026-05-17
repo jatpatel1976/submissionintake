@@ -1155,13 +1155,60 @@ button:active:not(:disabled) {
   margin-top: 10px;
 }
 
-.location-schedule-wrap table {
-  min-width: 680px;
+.data-table-wrap.location-schedule-wrap table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.location-schedule-wrap th:first-child,
+.location-schedule-wrap td:first-child {
+  width: 34%;
 }
 
 .location-schedule-wrap tr.is-selected-row td {
   background: #3b3732;
   box-shadow: inset 3px 0 0 #d9a46f;
+}
+
+.expandable-row-primary {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.expandable-row-toggle {
+  justify-content: flex-start;
+  width: fit-content;
+  min-height: 26px;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: #c9c2b7;
+  font-size: 11px;
+}
+
+.expandable-row-toggle svg {
+  transition: transform 140ms ease;
+}
+
+.expandable-row-toggle svg.is-open {
+  transform: rotate(180deg);
+}
+
+.expandable-detail-row td {
+  padding: 0;
+  background: #292825;
+}
+
+.expandable-detail-row:hover {
+  background: transparent;
+}
+
+.expandable-row-detail-list {
+  grid-template-columns: minmax(82px, 112px) minmax(0, 1fr);
+  gap: 8px 14px;
+  padding: 12px;
+  border-left: 3px solid #d9a46f;
 }
 
 .table-row-button {
